@@ -106,158 +106,6 @@ CREATE TABLE `audit_logs` (
   CONSTRAINT `audit_logs_user_id_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE `events` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `titulo` VARCHAR(150) NOT NULL,
-  `descripcion` TEXT NOT NULL,
-  `ubicacion` VARCHAR(200) NOT NULL,
-  `fecha_inicio` DATETIME NOT NULL,
-  `fecha_fin` DATETIME NOT NULL,
-  `tipo` VARCHAR(80) NOT NULL,
-  `cupos` INT UNSIGNED DEFAULT NULL,
-  `publico_objetivo` VARCHAR(150) DEFAULT NULL,
-  `estado` ENUM('borrador', 'revision', 'publicado', 'finalizado', 'cancelado') NOT NULL DEFAULT 'borrador',
-  `aprobacion_estado` ENUM('borrador', 'revision', 'publicado') NOT NULL DEFAULT 'borrador',
-  `habilitado` TINYINT(1) NOT NULL DEFAULT 1,
-  `validation_token` VARCHAR(64) DEFAULT NULL,
-  `unidad_id` INT UNSIGNED DEFAULT NULL,
-  `creado_por` INT UNSIGNED NOT NULL,
-  `encargado_id` INT UNSIGNED DEFAULT NULL,
-  `fecha_creacion` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `events_validation_token_unique` (`validation_token`),
-  CONSTRAINT `events_creado_por_fk` FOREIGN KEY (`creado_por`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
-  CONSTRAINT `events_encargado_fk` FOREIGN KEY (`encargado_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `event_attachments` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `archivo_nombre` VARCHAR(200) NOT NULL,
-  `archivo_ruta` VARCHAR(255) NOT NULL,
-  `archivo_tipo` VARCHAR(50) NOT NULL,
-  `subido_por` INT UNSIGNED NOT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  CONSTRAINT `event_attachments_event_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `event_attachments_subido_por_fk` FOREIGN KEY (`subido_por`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `authorities` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `nombre` VARCHAR(150) NOT NULL,
-  `tipo` VARCHAR(80) NOT NULL,
-  `correo` VARCHAR(150) DEFAULT NULL,
-  `telefono` VARCHAR(30) DEFAULT NULL,
-  `fecha_inicio` DATE NOT NULL,
-  `fecha_fin` DATE DEFAULT NULL,
-  `estado` TINYINT(1) NOT NULL DEFAULT 1,
-  `aprobacion_estado` ENUM('propuesta', 'validacion', 'vigente') NOT NULL DEFAULT 'propuesta',
-  `unidad_id` INT UNSIGNED DEFAULT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `event_authorities` (
-  `event_id` INT UNSIGNED NOT NULL,
-  `authority_id` INT UNSIGNED NOT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`event_id`, `authority_id`),
-  CONSTRAINT `event_authorities_event_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `event_authorities_authority_id_fk` FOREIGN KEY (`authority_id`) REFERENCES `authorities` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `event_authority_requests` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `destinatario_nombre` VARCHAR(150) DEFAULT NULL,
-  `destinatario_correo` VARCHAR(150) NOT NULL,
-  `token` VARCHAR(64) NOT NULL,
-  `correo_enviado` TINYINT(1) NOT NULL DEFAULT 0,
-  `estado` ENUM('pendiente', 'respondido') NOT NULL DEFAULT 'pendiente',
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `responded_at` TIMESTAMP NULL DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `event_authority_requests_token_unique` (`token`),
-  KEY `event_authority_requests_event_id_idx` (`event_id`),
-  CONSTRAINT `event_authority_requests_event_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `event_authority_confirmations` (
-  `request_id` INT UNSIGNED NOT NULL,
-  `authority_id` INT UNSIGNED NOT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`request_id`, `authority_id`),
-  CONSTRAINT `event_authority_confirmations_request_id_fk` FOREIGN KEY (`request_id`) REFERENCES `event_authority_requests` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `event_authority_confirmations_authority_id_fk` FOREIGN KEY (`authority_id`) REFERENCES `authorities` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `event_media_accreditation_links` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `token` VARCHAR(64) NOT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `event_media_accreditation_links_event_unique` (`event_id`),
-  UNIQUE KEY `event_media_accreditation_links_token_unique` (`token`),
-  CONSTRAINT `event_media_accreditation_links_event_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `media_accreditation_requests` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `medio` VARCHAR(200) NOT NULL,
-  `tipo_medio` VARCHAR(80) NOT NULL,
-  `tipo_medio_otro` VARCHAR(120) DEFAULT NULL,
-  `ciudad` VARCHAR(120) DEFAULT NULL,
-  `nombre` VARCHAR(120) NOT NULL,
-  `apellidos` VARCHAR(160) NOT NULL,
-  `rut` VARCHAR(30) NOT NULL,
-  `correo` VARCHAR(180) NOT NULL,
-  `celular` VARCHAR(40) DEFAULT NULL,
-  `cargo` VARCHAR(120) DEFAULT NULL,
-  `estado` ENUM('pendiente', 'aprobado', 'rechazado') NOT NULL DEFAULT 'pendiente',
-  `qr_token` VARCHAR(64) DEFAULT NULL,
-  `correo_enviado` TINYINT(1) NOT NULL DEFAULT 0,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `aprobado_at` TIMESTAMP NULL DEFAULT NULL,
-  `rechazado_at` TIMESTAMP NULL DEFAULT NULL,
-  `last_scan_at` TIMESTAMP NULL DEFAULT NULL,
-  `inside_estado` TINYINT(1) NOT NULL DEFAULT 0,
-  `sent_at` TIMESTAMP NULL DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `media_accreditation_requests_qr_unique` (`qr_token`),
-  KEY `media_accreditation_requests_event_idx` (`event_id`),
-  CONSTRAINT `media_accreditation_requests_event_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `media_accreditation_access_logs` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `request_id` INT UNSIGNED NOT NULL,
-  `accion` ENUM('ingreso', 'salida') NOT NULL,
-  `scanned_by` INT UNSIGNED DEFAULT NULL,
-  `scanned_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `media_accreditation_access_logs_event_idx` (`event_id`),
-  KEY `media_accreditation_access_logs_request_idx` (`request_id`),
-  CONSTRAINT `media_accreditation_access_logs_event_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `media_accreditation_access_logs_request_fk` FOREIGN KEY (`request_id`) REFERENCES `media_accreditation_requests` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `media_accreditation_access_logs_scanned_by_fk` FOREIGN KEY (`scanned_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `authority_attachments` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `authority_id` INT UNSIGNED NOT NULL,
-  `archivo_nombre` VARCHAR(200) NOT NULL,
-  `archivo_ruta` VARCHAR(255) NOT NULL,
-  `archivo_tipo` VARCHAR(50) NOT NULL,
-  `subido_por` INT UNSIGNED NOT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  CONSTRAINT `authority_attachments_authority_id_fk` FOREIGN KEY (`authority_id`) REFERENCES `authorities` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `authority_attachments_subido_por_fk` FOREIGN KEY (`subido_por`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `municipalidad` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -300,34 +148,6 @@ CREATE TABLE `email_templates` (
   UNIQUE KEY `email_templates_key_unique` (`template_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE `event_authority_invitations` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `authority_id` INT UNSIGNED NOT NULL,
-  `destinatario_correo` VARCHAR(150) DEFAULT NULL,
-  `correo_enviado` TINYINT(1) NOT NULL DEFAULT 0,
-  `sent_at` TIMESTAMP NULL DEFAULT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `event_authority_invitations_unique` (`event_id`, `authority_id`),
-  CONSTRAINT `event_authority_invitations_event_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `event_authority_invitations_authority_id_fk` FOREIGN KEY (`authority_id`) REFERENCES `authorities` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE `event_authority_attendance` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `event_id` INT UNSIGNED NOT NULL,
-  `authority_id` INT UNSIGNED NOT NULL,
-  `token` VARCHAR(64) NOT NULL,
-  `status` ENUM('pendiente', 'confirmado', 'rechazado') NOT NULL DEFAULT 'pendiente',
-  `responded_at` TIMESTAMP NULL DEFAULT NULL,
-  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `event_authority_attendance_unique` (`event_id`, `authority_id`),
-  UNIQUE KEY `event_authority_attendance_token_unique` (`token`),
-  CONSTRAINT `event_authority_attendance_event_id_fk` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `event_authority_attendance_authority_id_fk` FOREIGN KEY (`authority_id`) REFERENCES `authorities` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `notification_settings` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -496,6 +316,59 @@ VALUES
   ('Juventud', 'Programas juveniles'),
   ('Participación Ciudadana', 'Vinculación con la comunidad');
 
+CREATE TABLE `clientes` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `codigo` VARCHAR(20) NOT NULL,
+  `nombre` VARCHAR(150) NOT NULL,
+  `correo` VARCHAR(150) DEFAULT NULL,
+  `telefono` VARCHAR(50) DEFAULT NULL,
+  `direccion` VARCHAR(180) DEFAULT NULL,
+  `color_hex` VARCHAR(10) NOT NULL,
+  `estado` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `clientes_codigo_unique` (`codigo`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `tipos_servicios` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `nombre` VARCHAR(120) NOT NULL,
+  `descripcion` TEXT DEFAULT NULL,
+  `estado` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `servicios` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `tipo_servicio_id` INT DEFAULT NULL,
+  `nombre` VARCHAR(150) NOT NULL,
+  `descripcion` TEXT DEFAULT NULL,
+  `monto` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `estado` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `servicios_tipo_idx` (`tipo_servicio_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `cobros_servicios` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `servicio_id` INT NOT NULL,
+  `cliente_id` INT DEFAULT NULL,
+  `cliente` VARCHAR(150) NOT NULL,
+  `referencia` VARCHAR(120) DEFAULT NULL,
+  `monto` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `fecha_cobro` DATE NOT NULL,
+  `fecha_primer_aviso` DATE DEFAULT NULL,
+  `fecha_segundo_aviso` DATE DEFAULT NULL,
+  `fecha_tercer_aviso` DATE DEFAULT NULL,
+  `estado` VARCHAR(40) NOT NULL DEFAULT 'Pendiente',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `cobros_servicios_servicio_idx` (`servicio_id`),
+  KEY `cobros_servicios_cliente_idx` (`cliente_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO `municipalidad` (`nombre`, `rut`, `direccion`, `telefono`, `correo`, `logo_path`, `color_primary`, `color_secondary`)
 VALUES ('Go Muni', NULL, NULL, NULL, NULL, 'assets/images/logo.png', '#6658dd', '#4a81d4');
 
@@ -515,15 +388,6 @@ VALUES
   ('roles', 'crear', 'Crear roles'),
   ('roles', 'editar', 'Editar roles'),
   ('roles', 'eliminar', 'Deshabilitar roles'),
-  ('eventos', 'ver', 'Ver eventos'),
-  ('eventos', 'crear', 'Crear eventos'),
-  ('eventos', 'editar', 'Editar eventos'),
-  ('eventos', 'eliminar', 'Deshabilitar eventos'),
-  ('eventos', 'publicar', 'Publicar eventos'),
-  ('autoridades', 'ver', 'Ver autoridades'),
-  ('autoridades', 'crear', 'Crear autoridades'),
-  ('autoridades', 'editar', 'Editar autoridades'),
-  ('autoridades', 'eliminar', 'Deshabilitar autoridades'),
   ('adjuntos', 'subir', 'Subir adjuntos'),
   ('adjuntos', 'eliminar', 'Eliminar adjuntos'),
   ('adjuntos', 'descargar', 'Descargar adjuntos');
