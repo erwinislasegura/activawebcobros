@@ -160,13 +160,10 @@
                                 <a href="notificaciones-correo.php" class="side-nav-link">Correo de envío</a>
                             </li>
                             <li class="side-nav-item">
-                                <a href="invitacion-correo.php" class="side-nav-link">Correo invitación</a>
-                            </li>
-                            <li class="side-nav-item">
                                 <a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp envíos</a>
                             </li>
                             <li class="side-nav-item">
-                                <a href="configuracion-email.php" class="side-nav-link">Correo validación</a>
+                                <a href="configuracion-avisos.php" class="side-nav-link">Plantillas de avisos</a>
                             </li>
                             <li class="side-nav-item">
                                 <a href="configuracion-avisos.php" class="side-nav-link">Plantillas de avisos</a>
