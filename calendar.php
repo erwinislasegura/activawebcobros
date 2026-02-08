@@ -1,30 +1,72 @@
 <?php
 require __DIR__ . '/app/bootstrap.php';
 
-$statusClasses = [
-    'publicado' => 'bg-success-subtle text-success',
-    'borrador' => 'bg-warning-subtle text-warning',
-    'revision' => 'bg-info-subtle text-info',
-    'finalizado' => 'bg-secondary-subtle text-secondary',
-    'cancelado' => 'bg-danger-subtle text-danger',
-];
-
-$stmt = db()->query('SELECT id, titulo, fecha_inicio, fecha_fin, tipo, estado FROM events WHERE habilitado = 1 ORDER BY fecha_inicio');
 $calendarEvents = [];
-foreach ($stmt->fetchAll() as $evento) {
-    $start = DateTime::createFromFormat('Y-m-d H:i:s', $evento['fecha_inicio']);
-    $end = DateTime::createFromFormat('Y-m-d H:i:s', $evento['fecha_fin']);
-    $calendarEvents[] = [
-        'id' => (int) $evento['id'],
-        'title' => $evento['titulo'],
-        'start' => $start ? $start->format('Y-m-d\\TH:i:s') : $evento['fecha_inicio'],
-        'end' => $end ? $end->format('Y-m-d\\TH:i:s') : $evento['fecha_fin'],
-        'className' => $statusClasses[$evento['estado']] ?? 'bg-primary-subtle text-primary',
-        'url' => 'eventos-detalle.php?id=' . (int) $evento['id'],
-        'extendedProps' => [
-            'tipo' => $evento['tipo'],
-        ],
-    ];
+
+try {
+    $stmtCobros = db()->query(
+        'SELECT cs.id,
+                cs.fecha_cobro,
+                cs.fecha_primer_aviso,
+                cs.fecha_segundo_aviso,
+                cs.fecha_tercer_aviso,
+                COALESCE(c.nombre, cs.cliente) AS cliente,
+                s.nombre AS servicio,
+                c.color_hex AS color
+         FROM cobros_servicios cs
+         LEFT JOIN clientes c ON c.id = cs.cliente_id
+         LEFT JOIN servicios s ON s.id = cs.servicio_id
+         ORDER BY cs.fecha_cobro'
+    );
+    foreach ($stmtCobros->fetchAll() as $cobro) {
+        $color = $cobro['color'] ?: '#6c757d';
+        if (!empty($cobro['fecha_cobro'])) {
+            $calendarEvents[] = [
+                'id' => 'cobro-' . (int) $cobro['id'],
+                'title' => sprintf('Vence: %s - %s', $cobro['cliente'], $cobro['servicio'] ?? 'Servicio'),
+                'start' => $cobro['fecha_cobro'],
+                'allDay' => true,
+                'backgroundColor' => $color,
+                'borderColor' => $color,
+                'url' => 'cobros-servicios-registros.php',
+            ];
+        }
+        if (!empty($cobro['fecha_primer_aviso'])) {
+            $calendarEvents[] = [
+                'id' => 'aviso-1-' . (int) $cobro['id'],
+                'title' => sprintf('Aviso 1: %s - %s', $cobro['cliente'], $cobro['servicio'] ?? 'Servicio'),
+                'start' => $cobro['fecha_primer_aviso'],
+                'allDay' => true,
+                'backgroundColor' => $color,
+                'borderColor' => $color,
+                'url' => 'cobros-avisos.php',
+            ];
+        }
+        if (!empty($cobro['fecha_segundo_aviso'])) {
+            $calendarEvents[] = [
+                'id' => 'aviso-2-' . (int) $cobro['id'],
+                'title' => sprintf('Aviso 2: %s - %s', $cobro['cliente'], $cobro['servicio'] ?? 'Servicio'),
+                'start' => $cobro['fecha_segundo_aviso'],
+                'allDay' => true,
+                'backgroundColor' => $color,
+                'borderColor' => $color,
+                'url' => 'cobros-avisos.php',
+            ];
+        }
+        if (!empty($cobro['fecha_tercer_aviso'])) {
+            $calendarEvents[] = [
+                'id' => 'aviso-3-' . (int) $cobro['id'],
+                'title' => sprintf('Aviso 3: %s - %s', $cobro['cliente'], $cobro['servicio'] ?? 'Servicio'),
+                'start' => $cobro['fecha_tercer_aviso'],
+                'allDay' => true,
+                'backgroundColor' => $color,
+                'borderColor' => $color,
+                'url' => 'cobros-avisos.php',
+            ];
+        }
+    }
+} catch (Exception $e) {
+} catch (Error $e) {
 }
 
 try {
@@ -77,12 +119,12 @@ try {
 
             <div class="container-fluid">
 
-                <?php $subtitle = "Eventos Municipales"; $title = "Calendario"; include('partials/page-title.php'); ?>
+                <?php $subtitle = "Cobros de servicios"; $title = "Calendario"; include('partials/page-title.php'); ?>
 
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Calendario de eventos</h5>
-                        <p class="text-muted mb-0">Selecciona un evento para ver el detalle.</p>
+                        <h5 class="card-title mb-0">Calendario de cobros y avisos</h5>
+                        <p class="text-muted mb-0">Revisa vencimientos y avisos por cliente.</p>
                     </div>
                     <div class="card-body">
                         <div id="calendar"></div>

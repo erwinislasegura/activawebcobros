@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         $fechaSegundoAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +2 days'));
     }
     if ($fechaPrimerAviso !== '' && $fechaTercerAviso === '') {
-        $fechaTercerAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +3 days'));
+        $fechaTercerAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +5 days'));
     }
 
     if ($referencia === '') {
@@ -187,6 +187,7 @@ try {
                 COALESCE(c.nombre, cs.cliente) AS cliente,
                 c.codigo AS cliente_codigo,
                 c.color_hex AS cliente_color,
+                c.correo AS cliente_correo,
                 cs.referencia,
                 cs.monto,
                 cs.fecha_cobro,
@@ -484,7 +485,7 @@ try {
                     const segundo = new Date(primer);
                     segundo.setDate(segundo.getDate() + 2);
                     const tercero = new Date(primer);
-                    tercero.setDate(tercero.getDate() + 3);
+                    tercero.setDate(tercero.getDate() + 5);
                     segundoAvisoInput.value = segundo.toISOString().slice(0, 10);
                     tercerAvisoInput.value = tercero.toISOString().slice(0, 10);
                 });
