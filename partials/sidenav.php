@@ -83,6 +83,21 @@
                 </div>
             </li>
 
+            <li class="side-nav-item">
+                <a href="#modulo-clientes" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-clientes">
+                    <span class="menu-icon"><i data-lucide="users-2"></i></span>
+                    <span class="menu-text">Clientes</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-clientes">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item">
+                            <a href="clientes-crear.php" class="side-nav-link">Crear cliente</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
             <li class="side-nav-title" data-lang="settings-title">Administración</li>
 
             <?php if (has_permission('usuarios', 'view')) : ?>
@@ -137,12 +152,6 @@
                         <ul class="side-nav sub-menu">
                             <li class="side-nav-item">
                                 <a href="municipalidad.php" class="side-nav-link">Configurar empresa</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="eventos-tipos.php" class="side-nav-link">Tipos evento</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="grupos-autoridades.php" class="side-nav-link">Grupos autoridades</a>
                             </li>
                             <li class="side-nav-item">
                                 <a href="notificaciones-correo.php" class="side-nav-link">Correo de envío</a>

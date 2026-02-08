@@ -7,6 +7,20 @@ $success = $_GET['success'] ?? '';
 
 try {
     db()->exec(
+        'CREATE TABLE IF NOT EXISTS clientes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            codigo VARCHAR(20) NOT NULL,
+            nombre VARCHAR(150) NOT NULL,
+            correo VARCHAR(150) NULL,
+            telefono VARCHAR(50) NULL,
+            direccion VARCHAR(180) NULL,
+            color_hex VARCHAR(10) NOT NULL,
+            estado TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_clientes_codigo (codigo)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+    db()->exec(
         'CREATE TABLE IF NOT EXISTS servicios (
             id INT AUTO_INCREMENT PRIMARY KEY,
             tipo_servicio_id INT NULL,
@@ -21,6 +35,7 @@ try {
         'CREATE TABLE IF NOT EXISTS cobros_servicios (
             id INT AUTO_INCREMENT PRIMARY KEY,
             servicio_id INT NOT NULL,
+            cliente_id INT NULL,
             cliente VARCHAR(150) NOT NULL,
             referencia VARCHAR(120) NULL,
             monto DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -55,6 +70,7 @@ function ensure_column(string $table, string $column, string $definition): void
 
 try {
     ensure_column('servicios', 'tipo_servicio_id', 'INT NULL');
+    ensure_column('cobros_servicios', 'cliente_id', 'INT NULL');
     ensure_column('cobros_servicios', 'fecha_primer_aviso', 'DATE NULL');
     ensure_column('cobros_servicios', 'fecha_segundo_aviso', 'DATE NULL');
     ensure_column('cobros_servicios', 'fecha_tercer_aviso', 'DATE NULL');
@@ -64,9 +80,39 @@ try {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de cobros.';
 }
 
+function generar_referencia_cobro(): string
+{
+    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $ref = '';
+    for ($i = 0; $i < 7; $i++) {
+        $ref .= $chars[random_int(0, strlen($chars) - 1)];
+    }
+    return $ref;
+}
+
+function referencia_unica(): string
+{
+    $stmt = db()->prepare('SELECT COUNT(*) FROM cobros_servicios WHERE referencia = ?');
+    $referencia = generar_referencia_cobro();
+    while (true) {
+        $stmt->execute([$referencia]);
+        if ((int) $stmt->fetchColumn() === 0) {
+            break;
+        }
+        $referencia = generar_referencia_cobro();
+    }
+    return $referencia;
+}
+
+$referenciaInput = trim($_POST['referencia'] ?? '');
+if ($referenciaInput === '') {
+    $referenciaInput = referencia_unica();
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $servicioId = (int) ($_POST['servicio_id'] ?? 0);
-    $cliente = trim($_POST['cliente'] ?? '');
+    $clienteId = (int) ($_POST['cliente_id'] ?? 0);
+    $cliente = '';
     $referencia = trim($_POST['referencia'] ?? '');
     $monto = trim($_POST['monto'] ?? '');
     $fechaCobro = trim($_POST['fecha_cobro'] ?? '');
@@ -78,8 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     if ($servicioId <= 0) {
         $errors[] = 'Selecciona un servicio válido.';
     }
-    if ($cliente === '') {
-        $errors[] = 'El nombre del cliente es obligatorio.';
+    if ($clienteId <= 0) {
+        $errors[] = 'Selecciona un cliente válido.';
     }
     if ($monto === '' || !is_numeric($monto) || (float) $monto < 0) {
         $errors[] = 'Ingresa un monto válido.';
@@ -91,12 +137,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         $errors[] = 'Selecciona un estado.';
     }
 
+    if ($fechaPrimerAviso !== '' && $fechaSegundoAviso === '') {
+        $fechaSegundoAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +2 days'));
+    }
+    if ($fechaPrimerAviso !== '' && $fechaTercerAviso === '') {
+        $fechaTercerAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +3 days'));
+    }
+
+    if ($referencia === '') {
+        $referencia = referencia_unica();
+    }
+
     if (empty($errors)) {
         try {
-            $stmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente, referencia, monto, fecha_cobro, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $clienteStmt = db()->prepare('SELECT nombre FROM clientes WHERE id = ?');
+            $clienteStmt->execute([$clienteId]);
+            $cliente = (string) ($clienteStmt->fetchColumn() ?: '');
+
+            $stmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente_id, cliente, referencia, monto, fecha_cobro, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $servicioId,
-                $cliente,
+                $clienteId > 0 ? $clienteId : null,
+                $cliente !== '' ? $cliente : 'Cliente sin nombre',
                 $referencia !== '' ? $referencia : null,
                 $monto,
                 $fechaCobro,
@@ -114,13 +176,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     }
 }
 
+$clientes = [];
 $servicios = [];
 $cobros = [];
 try {
+    $clientes = db()->query('SELECT id, codigo, nombre, color_hex FROM clientes WHERE estado = 1 ORDER BY nombre')->fetchAll();
     $servicios = db()->query('SELECT id, nombre, monto FROM servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
     $cobros = db()->query(
-        'SELECT cs.id, cs.cliente, cs.referencia, cs.monto, cs.fecha_cobro, cs.fecha_primer_aviso, cs.fecha_segundo_aviso, cs.fecha_tercer_aviso, cs.estado, cs.created_at, s.nombre AS servicio
+        'SELECT cs.id,
+                COALESCE(c.nombre, cs.cliente) AS cliente,
+                c.codigo AS cliente_codigo,
+                c.color_hex AS cliente_color,
+                cs.referencia,
+                cs.monto,
+                cs.fecha_cobro,
+                cs.fecha_primer_aviso,
+                cs.fecha_segundo_aviso,
+                cs.fecha_tercer_aviso,
+                cs.estado,
+                cs.created_at,
+                s.nombre AS servicio
          FROM cobros_servicios cs
+         LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
          ORDER BY cs.id DESC'
     )->fetchAll();
@@ -195,11 +272,22 @@ try {
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-cliente">Cliente</label>
-                                        <input type="text" id="cobro-cliente" name="cliente" class="form-control" required>
+                                        <select id="cobro-cliente" name="cliente_id" class="form-select" required>
+                                            <option value="">Selecciona un cliente</option>
+                                            <?php foreach ($clientes as $cliente) : ?>
+                                                <option value="<?php echo (int) $cliente['id']; ?>">
+                                                    <?php echo htmlspecialchars($cliente['codigo'] . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <?php if (empty($clientes)) : ?>
+                                            <small class="text-muted d-block mt-2">Primero registra clientes en "Crear cliente".</small>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-referencia">Referencia</label>
-                                        <input type="text" id="cobro-referencia" name="referencia" class="form-control" placeholder="Boleta, factura o folio">
+                                        <input type="text" id="cobro-referencia" name="referencia" class="form-control" value="<?php echo htmlspecialchars($referenciaInput, ENT_QUOTES, 'UTF-8'); ?>" readonly>
+                                        <small class="text-muted">Referencia única generada automáticamente.</small>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-monto">Monto cobrado</label>
@@ -307,6 +395,47 @@ try {
                                 </div>
                             </div>
                         </div>
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Vencimientos por cliente</h5>
+                                <p class="text-muted mb-0">Una fila por servicio con su fecha de vencimiento.</p>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-centered mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Cliente</th>
+                                                <th>Servicio</th>
+                                                <th>Fecha vencimiento</th>
+                                                <th>Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (empty($cobros)) : ?>
+                                                <tr>
+                                                    <td colspan="4" class="text-center text-muted">No hay vencimientos registrados.</td>
+                                                </tr>
+                                            <?php else : ?>
+                                                <?php foreach ($cobros as $cobro) : ?>
+                                                    <tr>
+                                                        <td>
+                                                            <span class="badge" style="background-color: <?php echo htmlspecialchars($cobro['cliente_color'] ?? '#6c757d', ENT_QUOTES, 'UTF-8'); ?>;">
+                                                                <?php echo htmlspecialchars($cobro['cliente_codigo'] ?? 'SIN-COD', ENT_QUOTES, 'UTF-8'); ?>
+                                                            </span>
+                                                            <?php echo htmlspecialchars($cobro['cliente'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </td>
+                                                        <td><?php echo htmlspecialchars($cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_cobro'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars($cobro['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -332,16 +461,34 @@ try {
         (function () {
             const servicioSelect = document.getElementById('cobro-servicio');
             const montoInput = document.getElementById('cobro-monto');
-            if (!servicioSelect || !montoInput) {
-                return;
+            const primerAvisoInput = document.getElementById('cobro-primer-aviso');
+            const segundoAvisoInput = document.getElementById('cobro-segundo-aviso');
+            const tercerAvisoInput = document.getElementById('cobro-tercer-aviso');
+
+            if (servicioSelect && montoInput) {
+                servicioSelect.addEventListener('change', function () {
+                    const selected = servicioSelect.options[servicioSelect.selectedIndex];
+                    const monto = selected?.dataset?.monto ?? '';
+                    if (monto !== '') {
+                        montoInput.value = monto;
+                    }
+                });
             }
-            servicioSelect.addEventListener('change', function () {
-                const selected = servicioSelect.options[servicioSelect.selectedIndex];
-                const monto = selected?.dataset?.monto ?? '';
-                if (monto !== '') {
-                    montoInput.value = monto;
-                }
-            });
+
+            if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {
+                primerAvisoInput.addEventListener('change', function () {
+                    if (!primerAvisoInput.value) {
+                        return;
+                    }
+                    const primer = new Date(primerAvisoInput.value + 'T00:00:00');
+                    const segundo = new Date(primer);
+                    segundo.setDate(segundo.getDate() + 2);
+                    const tercero = new Date(primer);
+                    tercero.setDate(tercero.getDate() + 3);
+                    segundoAvisoInput.value = segundo.toISOString().slice(0, 10);
+                    tercerAvisoInput.value = tercero.toISOString().slice(0, 10);
+                });
+            }
         })();
     </script>
 
