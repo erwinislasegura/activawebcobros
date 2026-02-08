@@ -1,5 +1,9 @@
--- Actualización: permisos para clientes, servicios, cobros y avisos
--- Fecha: 2026-03-24
+-- Actualización: normalizar permisos de módulos vigentes
+-- Fecha: 2026-03-26
+
+DELETE FROM `permissions`
+WHERE `modulo` IN ('clientes', 'servicios', 'cobros', 'avisos')
+  AND `accion` IN ('ver', 'crear', 'editar', 'eliminar', 'enviar');
 
 INSERT INTO `permissions` (`modulo`, `accion`, `descripcion`)
 VALUES
