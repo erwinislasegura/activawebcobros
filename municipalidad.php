@@ -5,6 +5,26 @@ $municipalidad = get_municipalidad();
 $errors = [];
 $success = $_GET['success'] ?? '';
 
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    $exists = (int) $stmt->fetchColumn() > 0;
+    if (!$exists) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
+
+try {
+    ensure_column('municipalidad', 'logo_inicio_path', 'VARCHAR(255) NULL');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $nombre = trim($_POST['nombre'] ?? '');
     $rut = trim($_POST['rut'] ?? '');
@@ -19,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     $colorSecondary = trim($_POST['color_secondary'] ?? '#4a81d4');
 
     if ($nombre === '') {
-        $errors[] = 'El nombre de la municipalidad es obligatorio.';
+        $errors[] = 'El nombre de la empresa es obligatorio.';
     }
 
     if ($colorPrimary !== '' && !preg_match('/^#([A-Fa-f0-9]{3}){1,2}$/', $colorPrimary)) {
@@ -47,7 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     }
 
     $logoPath = $municipalidad['logo_path'] ?? 'assets/images/logo.png';
+    $logoInicioPath = $municipalidad['logo_inicio_path'] ?? '';
     $logoUpload = $_FILES['logo'] ?? null;
+    $logoInicioUpload = $_FILES['logo_inicio'] ?? null;
     if (is_array($logoUpload) && ($logoUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
         $uploadDir = __DIR__ . '/assets/images/municipalidad/';
         if (!is_dir($uploadDir)) {
@@ -75,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         if (empty($errors) && !in_array($extension, $allowed, true)) {
             $errors[] = 'Formato de logo no permitido. Usa PNG, JPG o SVG.';
         } elseif (empty($errors)) {
-            $fileName = 'logo-municipalidad-' . date('YmdHis') . '.' . $extension;
+            $fileName = 'logo-empresa-' . date('YmdHis') . '.' . $extension;
             $targetPath = $uploadDir . $fileName;
             if (!move_uploaded_file($logoUpload['tmp_name'], $targetPath)) {
                 $errors[] = 'No se pudo cargar el logo.';
@@ -85,12 +107,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         }
     }
 
+    if (is_array($logoInicioUpload) && ($logoInicioUpload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $uploadDir = __DIR__ . '/assets/images/municipalidad/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0775, true);
+        }
+        if (($logoInicioUpload['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            $errors[] = 'No se pudo cargar el logo de inicio. Intenta nuevamente.';
+        } else {
+            $extension = strtolower(pathinfo($logoInicioUpload['name'], PATHINFO_EXTENSION));
+        }
+        $allowed = ['png', 'jpg', 'jpeg', 'svg'];
+        $allowedMime = [
+            'png' => ['image/png'],
+            'jpg' => ['image/jpeg'],
+            'jpeg' => ['image/jpeg'],
+            'svg' => ['image/svg+xml', 'text/plain'],
+        ];
+        if (empty($errors) && is_uploaded_file($logoInicioUpload['tmp_name'])) {
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->file($logoInicioUpload['tmp_name']);
+            if (!in_array($mimeType, $allowedMime[$extension] ?? [], true)) {
+                $errors[] = 'El logo de inicio no corresponde a un formato permitido (PNG, JPG o SVG).';
+            }
+        }
+        if (empty($errors) && !in_array($extension, $allowed, true)) {
+            $errors[] = 'Formato de logo de inicio no permitido. Usa PNG, JPG o SVG.';
+        } elseif (empty($errors)) {
+            $fileName = 'logo-inicio-' . date('YmdHis') . '.' . $extension;
+            $targetPath = $uploadDir . $fileName;
+            if (!move_uploaded_file($logoInicioUpload['tmp_name'], $targetPath)) {
+                $errors[] = 'No se pudo cargar el logo de inicio.';
+            } else {
+                $logoInicioPath = 'assets/images/municipalidad/' . $fileName;
+            }
+        }
+    }
+
     if (empty($errors)) {
         $stmt = db()->query('SELECT id FROM municipalidad LIMIT 1');
         $id = $stmt->fetchColumn();
 
         if ($id) {
-            $stmtUpdate = db()->prepare('UPDATE municipalidad SET nombre = ?, rut = ?, direccion = ?, telefono = ?, correo = ?, logo_path = ?, logo_topbar_height = ?, logo_sidenav_height = ?, logo_sidenav_height_sm = ?, logo_auth_height = ?, color_primary = ?, color_secondary = ? WHERE id = ?');
+            $stmtUpdate = db()->prepare('UPDATE municipalidad SET nombre = ?, rut = ?, direccion = ?, telefono = ?, correo = ?, logo_path = ?, logo_inicio_path = ?, logo_topbar_height = ?, logo_sidenav_height = ?, logo_sidenav_height_sm = ?, logo_auth_height = ?, color_primary = ?, color_secondary = ? WHERE id = ?');
             $stmtUpdate->execute([
                 $nombre,
                 $rut,
@@ -98,6 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $telefono !== '' ? $telefono : null,
                 $correo !== '' ? $correo : null,
                 $logoPath,
+                $logoInicioPath !== '' ? $logoInicioPath : null,
                 $logoTopbarHeight !== '' ? (int) $logoTopbarHeight : null,
                 $logoSidenavHeight !== '' ? (int) $logoSidenavHeight : null,
                 $logoSidenavHeightSm !== '' ? (int) $logoSidenavHeightSm : null,
@@ -107,7 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $id,
             ]);
         } else {
-            $stmtInsert = db()->prepare('INSERT INTO municipalidad (nombre, rut, direccion, telefono, correo, logo_path, logo_topbar_height, logo_sidenav_height, logo_sidenav_height_sm, logo_auth_height, color_primary, color_secondary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $stmtInsert = db()->prepare('INSERT INTO municipalidad (nombre, rut, direccion, telefono, correo, logo_path, logo_inicio_path, logo_topbar_height, logo_sidenav_height, logo_sidenav_height_sm, logo_auth_height, color_primary, color_secondary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmtInsert->execute([
                 $nombre,
                 $rut,
@@ -115,6 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $telefono !== '' ? $telefono : null,
                 $correo !== '' ? $correo : null,
                 $logoPath,
+                $logoInicioPath !== '' ? $logoInicioPath : null,
                 $logoTopbarHeight !== '' ? (int) $logoTopbarHeight : null,
                 $logoSidenavHeight !== '' ? (int) $logoSidenavHeight : null,
                 $logoSidenavHeightSm !== '' ? (int) $logoSidenavHeightSm : null,
@@ -134,6 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         'telefono' => $telefono,
         'correo' => $correo,
         'logo_path' => $logoPath,
+        'logo_inicio_path' => $logoInicioPath,
         'logo_topbar_height' => $logoTopbarHeight,
         'logo_sidenav_height' => $logoSidenavHeight,
         'logo_sidenav_height_sm' => $logoSidenavHeightSm,
@@ -146,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 <?php include('partials/html.php'); ?>
 
 <head>
-    <?php $title = "Municipalidad"; include('partials/title-meta.php'); ?>
+    <?php $title = "Configurar empresa"; include('partials/title-meta.php'); ?>
 
     <?php include('partials/head-css.php'); ?>
 </head>
@@ -165,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
             <div class="container-fluid">
 
-                <?php $subtitle = "Configuración"; $title = "Municipalidad"; include('partials/page-title.php'); ?>
+                <?php $subtitle = "Configuración"; $title = "Configurar empresa"; include('partials/page-title.php'); ?>
 
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Información actualizada correctamente.</div>
@@ -176,8 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                         <div class="card gm-section">
                             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                                 <div>
-                                    <h5 class="card-title mb-0">Datos de municipalidad</h5>
-                                    <p class="text-muted mb-0">Actualiza información institucional, logo y colores.</p>
+                                    <h5 class="card-title mb-0">Datos de la empresa</h5>
+                                    <p class="text-muted mb-0">Actualiza información de la empresa, logo y colores.</p>
                                 </div>
                                 <button type="submit" form="municipalidad-form" class="btn btn-primary">Guardar cambios</button>
                             </div>
@@ -196,23 +258,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                                         <div class="col-lg-7">
                                             <div class="row">
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label" for="muni-nombre">Nombre</label>
+                                                    <label class="form-label" for="muni-nombre">Nombre de la empresa</label>
                                                     <input type="text" id="muni-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($municipalidad['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                                 </div>
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label" for="muni-rut">RUT</label>
+                                                    <label class="form-label" for="muni-rut">RUT empresa</label>
                                                     <input type="text" id="muni-rut" name="rut" class="form-control" value="<?php echo htmlspecialchars($municipalidad['rut'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                                 </div>
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label" for="muni-correo">Correo</label>
+                                                    <label class="form-label" for="muni-correo">Correo empresa</label>
                                                     <input type="email" id="muni-correo" name="correo" class="form-control" value="<?php echo htmlspecialchars($municipalidad['correo'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                                 </div>
                                                 <div class="col-md-6 mb-3">
-                                                    <label class="form-label" for="muni-telefono">Teléfono</label>
+                                                    <label class="form-label" for="muni-telefono">Teléfono empresa</label>
                                                     <input type="text" id="muni-telefono" name="telefono" class="form-control" value="<?php echo htmlspecialchars($municipalidad['telefono'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                                 </div>
                                                 <div class="col-12 mb-3">
-                                                    <label class="form-label" for="muni-direccion">Dirección</label>
+                                                    <label class="form-label" for="muni-direccion">Dirección empresa</label>
                                                     <input type="text" id="muni-direccion" name="direccion" class="form-control" value="<?php echo htmlspecialchars($municipalidad['direccion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                                 </div>
                                                 <div class="col-md-6 mb-3">
@@ -235,9 +297,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                                             <div class="bg-light border rounded-3 p-4 h-100">
                                                 <h6 class="mb-3">Identidad visual</h6>
                                                 <div class="mb-3">
-                                                    <label class="form-label" for="muni-logo">Logo institucional</label>
+                                                    <label class="form-label" for="muni-logo">Logo empresa</label>
                                                     <input type="file" id="muni-logo" name="logo" class="form-control" accept=".png,.jpg,.jpeg,.svg">
-                                                    <small class="text-muted">PNG, JPG o SVG. Se usará como logo del proyecto.</small>
+                                                    <small class="text-muted">PNG, JPG o SVG. Se usará como logo de la empresa.</small>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label" for="muni-logo-inicio">Logo de inicio</label>
+                                                    <input type="file" id="muni-logo-inicio" name="logo_inicio" class="form-control" accept=".png,.jpg,.jpeg,.svg">
+                                                    <small class="text-muted">Logo para login, registro y recuperación de contraseña.</small>
                                                 </div>
                                                 <div class="mb-3">
                                                     <label class="form-label">Tamaños del logo por sección</label>
@@ -272,7 +339,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                                                 <div>
                                                     <label class="form-label">Vista previa</label>
                                                     <div class="border rounded bg-white p-3 text-center">
-                                                        <img src="<?php echo htmlspecialchars($municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="Logo municipalidad" style="max-height: 96px;">
+                                                        <img src="<?php echo htmlspecialchars($municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="Logo empresa" style="max-height: 96px;">
+                                                    </div>
+                                                    <div class="border rounded bg-white p-3 text-center mt-3">
+                                                        <img src="<?php echo htmlspecialchars($municipalidad['logo_inicio_path'] ?? $municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="Logo inicio" style="max-height: 96px;">
                                                     </div>
                                                 </div>
                                             </div>
