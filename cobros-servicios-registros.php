@@ -9,6 +9,7 @@ try {
     db()->exec(
         'CREATE TABLE IF NOT EXISTS servicios (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            tipo_servicio_id INT NULL,
             nombre VARCHAR(150) NOT NULL,
             descripcion TEXT NULL,
             monto DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -24,6 +25,9 @@ try {
             referencia VARCHAR(120) NULL,
             monto DECIMAL(10,2) NOT NULL DEFAULT 0,
             fecha_cobro DATE NOT NULL,
+            fecha_primer_aviso DATE NULL,
+            fecha_segundo_aviso DATE NULL,
+            fecha_tercer_aviso DATE NULL,
             estado VARCHAR(40) NOT NULL DEFAULT "Pendiente",
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_cobros_servicios_servicio (servicio_id)
@@ -35,12 +39,40 @@ try {
     $errorMessage = 'No se pudieron preparar las tablas de cobros.';
 }
 
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    $exists = (int) $stmt->fetchColumn() > 0;
+    if (!$exists) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
+
+try {
+    ensure_column('servicios', 'tipo_servicio_id', 'INT NULL');
+    ensure_column('cobros_servicios', 'fecha_primer_aviso', 'DATE NULL');
+    ensure_column('cobros_servicios', 'fecha_segundo_aviso', 'DATE NULL');
+    ensure_column('cobros_servicios', 'fecha_tercer_aviso', 'DATE NULL');
+} catch (Exception $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de cobros.';
+} catch (Error $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de cobros.';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $servicioId = (int) ($_POST['servicio_id'] ?? 0);
     $cliente = trim($_POST['cliente'] ?? '');
     $referencia = trim($_POST['referencia'] ?? '');
     $monto = trim($_POST['monto'] ?? '');
     $fechaCobro = trim($_POST['fecha_cobro'] ?? '');
+    $fechaPrimerAviso = trim($_POST['fecha_primer_aviso'] ?? '');
+    $fechaSegundoAviso = trim($_POST['fecha_segundo_aviso'] ?? '');
+    $fechaTercerAviso = trim($_POST['fecha_tercer_aviso'] ?? '');
     $estado = trim($_POST['estado'] ?? 'Pendiente');
 
     if ($servicioId <= 0) {
@@ -61,13 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
     if (empty($errors)) {
         try {
-            $stmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente, referencia, monto, fecha_cobro, estado) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente, referencia, monto, fecha_cobro, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $servicioId,
                 $cliente,
                 $referencia !== '' ? $referencia : null,
                 $monto,
                 $fechaCobro,
+                $fechaPrimerAviso !== '' ? $fechaPrimerAviso : null,
+                $fechaSegundoAviso !== '' ? $fechaSegundoAviso : null,
+                $fechaTercerAviso !== '' ? $fechaTercerAviso : null,
                 $estado,
             ]);
             redirect('cobros-servicios-registros.php?success=1');
@@ -84,7 +119,7 @@ $cobros = [];
 try {
     $servicios = db()->query('SELECT id, nombre, monto FROM servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
     $cobros = db()->query(
-        'SELECT cs.id, cs.cliente, cs.referencia, cs.monto, cs.fecha_cobro, cs.estado, cs.created_at, s.nombre AS servicio
+        'SELECT cs.id, cs.cliente, cs.referencia, cs.monto, cs.fecha_cobro, cs.fecha_primer_aviso, cs.fecha_segundo_aviso, cs.fecha_tercer_aviso, cs.estado, cs.created_at, s.nombre AS servicio
          FROM cobros_servicios cs
          JOIN servicios s ON s.id = cs.servicio_id
          ORDER BY cs.id DESC'
@@ -149,7 +184,7 @@ try {
                                         <select id="cobro-servicio" name="servicio_id" class="form-select" required>
                                             <option value="">Selecciona un servicio</option>
                                             <?php foreach ($servicios as $servicio) : ?>
-                                                <option value="<?php echo (int) $servicio['id']; ?>">
+                                                <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>">
                                                     <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
                                                 </option>
                                             <?php endforeach; ?>
@@ -176,6 +211,18 @@ try {
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-fecha">Fecha de cobro</label>
                                         <input type="date" id="cobro-fecha" name="fecha_cobro" class="form-control" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="cobro-primer-aviso">Fecha primer aviso</label>
+                                        <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="cobro-segundo-aviso">Fecha segundo aviso</label>
+                                        <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="cobro-tercer-aviso">Fecha tercer aviso</label>
+                                        <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-estado">Estado</label>
@@ -211,13 +258,14 @@ try {
                                                 <th>Referencia</th>
                                                 <th>Monto</th>
                                                 <th>Fecha</th>
+                                                <th>Avisos</th>
                                                 <th>Estado</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($cobros)) : ?>
                                                 <tr>
-                                                    <td colspan="6" class="text-center text-muted">No hay cobros registrados.</td>
+                                                    <td colspan="7" class="text-center text-muted">No hay cobros registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($cobros as $cobro) : ?>
@@ -227,6 +275,15 @@ try {
                                                         <td><?php echo htmlspecialchars($cobro['referencia'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td>$<?php echo number_format((float) $cobro['monto'], 2, ',', '.'); ?></td>
                                                         <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_cobro'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td>
+                                                            <div class="text-muted small">
+                                                                <?php echo $cobro['fecha_primer_aviso'] ? htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_primer_aviso'])), ENT_QUOTES, 'UTF-8') : '-'; ?>
+                                                                /
+                                                                <?php echo $cobro['fecha_segundo_aviso'] ? htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_segundo_aviso'])), ENT_QUOTES, 'UTF-8') : '-'; ?>
+                                                                /
+                                                                <?php echo $cobro['fecha_tercer_aviso'] ? htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_tercer_aviso'])), ENT_QUOTES, 'UTF-8') : '-'; ?>
+                                                            </div>
+                                                        </td>
                                                         <td>
                                                             <?php
                                                             $estadoClass = 'text-bg-secondary';
@@ -270,6 +327,23 @@ try {
     <?php include('partials/customizer.php'); ?>
 
     <?php include('partials/footer-scripts.php'); ?>
+
+    <script>
+        (function () {
+            const servicioSelect = document.getElementById('cobro-servicio');
+            const montoInput = document.getElementById('cobro-monto');
+            if (!servicioSelect || !montoInput) {
+                return;
+            }
+            servicioSelect.addEventListener('change', function () {
+                const selected = servicioSelect.options[servicioSelect.selectedIndex];
+                const monto = selected?.dataset?.monto ?? '';
+                if (monto !== '') {
+                    montoInput.value = monto;
+                }
+            });
+        })();
+    </script>
 
 </body>
 

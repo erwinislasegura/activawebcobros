@@ -7,13 +7,24 @@ $success = $_GET['success'] ?? '';
 
 try {
     db()->exec(
+        'CREATE TABLE IF NOT EXISTS tipos_servicios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nombre VARCHAR(120) NOT NULL,
+            descripcion TEXT NULL,
+            estado TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+    db()->exec(
         'CREATE TABLE IF NOT EXISTS servicios (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            tipo_servicio_id INT NULL,
             nombre VARCHAR(150) NOT NULL,
             descripcion TEXT NULL,
             monto DECIMAL(10,2) NOT NULL DEFAULT 0,
             estado TINYINT(1) NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_servicios_tipo (tipo_servicio_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 } catch (Exception $e) {
@@ -22,7 +33,30 @@ try {
     $errorMessage = 'No se pudo preparar la tabla de servicios.';
 }
 
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    $exists = (int) $stmt->fetchColumn() > 0;
+    if (!$exists) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
+
+try {
+    ensure_column('servicios', 'tipo_servicio_id', 'INT NULL');
+} catch (Exception $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de servicios.';
+} catch (Error $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de servicios.';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $tipoServicioId = (int) ($_POST['tipo_servicio_id'] ?? 0);
     $nombre = trim($_POST['nombre'] ?? '');
     $descripcion = trim($_POST['descripcion'] ?? '');
     $monto = trim($_POST['monto'] ?? '');
@@ -38,8 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
     if (empty($errors)) {
         try {
-            $stmt = db()->prepare('INSERT INTO servicios (nombre, descripcion, monto, estado) VALUES (?, ?, ?, ?)');
+            $stmt = db()->prepare('INSERT INTO servicios (tipo_servicio_id, nombre, descripcion, monto, estado) VALUES (?, ?, ?, ?, ?)');
             $stmt->execute([
+                $tipoServicioId > 0 ? $tipoServicioId : null,
                 $nombre,
                 $descripcion !== '' ? $descripcion : null,
                 $monto,
@@ -54,9 +89,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     }
 }
 
+$tiposServicios = [];
 $servicios = [];
 try {
-    $servicios = db()->query('SELECT id, nombre, descripcion, monto, estado, created_at FROM servicios ORDER BY id DESC')->fetchAll();
+    $tiposServicios = db()->query('SELECT id, nombre FROM tipos_servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
+    $servicios = db()->query(
+        'SELECT s.id, s.nombre, s.descripcion, s.monto, s.estado, s.created_at, t.nombre AS tipo
+         FROM servicios s
+         LEFT JOIN tipos_servicios t ON t.id = s.tipo_servicio_id
+         ORDER BY s.id DESC'
+    )->fetchAll();
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los servicios.';
 } catch (Error $e) {
@@ -113,6 +155,20 @@ try {
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                     <div class="mb-3">
+                                        <label class="form-label" for="servicio-tipo">Tipo de servicio</label>
+                                        <select id="servicio-tipo" name="tipo_servicio_id" class="form-select">
+                                            <option value="">Selecciona un tipo</option>
+                                            <?php foreach ($tiposServicios as $tipo) : ?>
+                                                <option value="<?php echo (int) $tipo['id']; ?>">
+                                                    <?php echo htmlspecialchars($tipo['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <?php if (empty($tiposServicios)) : ?>
+                                            <small class="text-muted d-block mt-2">Primero registra tipos en "Tipos de servicios".</small>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="mb-3">
                                         <label class="form-label" for="servicio-nombre">Nombre del servicio</label>
                                         <input type="text" id="servicio-nombre" name="nombre" class="form-control" required>
                                     </div>
@@ -154,6 +210,7 @@ try {
                                         <thead>
                                             <tr>
                                                 <th>Servicio</th>
+                                                <th>Tipo</th>
                                                 <th>Descripción</th>
                                                 <th>Monto</th>
                                                 <th>Estado</th>
@@ -163,12 +220,13 @@ try {
                                         <tbody>
                                             <?php if (empty($servicios)) : ?>
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">Aún no hay servicios registrados.</td>
+                                                    <td colspan="6" class="text-center text-muted">Aún no hay servicios registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($servicios as $servicio) : ?>
                                                     <tr>
                                                         <td><?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars($servicio['tipo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($servicio['descripcion'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td>$<?php echo number_format((float) $servicio['monto'], 2, ',', '.'); ?></td>
                                                         <td>

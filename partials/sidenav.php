@@ -51,6 +51,24 @@
             </li>
 
             <li class="side-nav-item">
+                <a href="#modulo-servicios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-servicios">
+                    <span class="menu-icon"><i data-lucide="briefcase"></i></span>
+                    <span class="menu-text">Servicios</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-servicios">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item">
+                            <a href="cobros-servicios-agregar.php" class="side-nav-link">Crear servicios</a>
+                        </li>
+                        <li class="side-nav-item">
+                            <a href="tipos-servicios.php" class="side-nav-link">Tipos de servicios</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            <li class="side-nav-item">
                 <a href="#modulo-cobros-servicios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-cobros-servicios">
                     <span class="menu-icon"><i data-lucide="receipt"></i></span>
                     <span class="menu-text">Cobros de servicios</span>
@@ -58,9 +76,6 @@
                 </a>
                 <div class="collapse" id="modulo-cobros-servicios">
                     <ul class="side-nav sub-menu">
-                        <li class="side-nav-item">
-                            <a href="cobros-servicios-agregar.php" class="side-nav-link">Agregar servicio</a>
-                        </li>
                         <li class="side-nav-item">
                             <a href="cobros-servicios-registros.php" class="side-nav-link">Registros de cobros</a>
                         </li>
