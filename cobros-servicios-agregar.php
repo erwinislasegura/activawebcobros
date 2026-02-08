@@ -55,7 +55,36 @@ try {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de servicios.';
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+    if ($deleteId > 0) {
+        try {
+            $stmt = db()->prepare('DELETE FROM servicios WHERE id = ?');
+            $stmt->execute([$deleteId]);
+            redirect('cobros-servicios-agregar.php');
+        } catch (Exception $e) {
+            $errorMessage = 'No se pudo eliminar el servicio.';
+        } catch (Error $e) {
+            $errorMessage = 'No se pudo eliminar el servicio.';
+        }
+    }
+}
+
+$servicioEdit = null;
+if (isset($_GET['id'])) {
+    $editId = (int) $_GET['id'];
+    if ($editId > 0) {
+        try {
+            $stmt = db()->prepare('SELECT id, tipo_servicio_id, nombre, descripcion, monto, estado FROM servicios WHERE id = ?');
+            $stmt->execute([$editId]);
+            $servicioEdit = $stmt->fetch() ?: null;
+        } catch (Exception $e) {
+        } catch (Error $e) {
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_csrf($_POST['csrf_token'] ?? null)) {
     $tipoServicioId = (int) ($_POST['tipo_servicio_id'] ?? 0);
     $nombre = trim($_POST['nombre'] ?? '');
     $descripcion = trim($_POST['descripcion'] ?? '');
@@ -72,14 +101,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
     if (empty($errors)) {
         try {
-            $stmt = db()->prepare('INSERT INTO servicios (tipo_servicio_id, nombre, descripcion, monto, estado) VALUES (?, ?, ?, ?, ?)');
-            $stmt->execute([
-                $tipoServicioId > 0 ? $tipoServicioId : null,
-                $nombre,
-                $descripcion !== '' ? $descripcion : null,
-                $monto,
-                $estado,
-            ]);
+            if ($servicioEdit && isset($servicioEdit['id'])) {
+                $stmt = db()->prepare('UPDATE servicios SET tipo_servicio_id = ?, nombre = ?, descripcion = ?, monto = ?, estado = ? WHERE id = ?');
+                $stmt->execute([
+                    $tipoServicioId > 0 ? $tipoServicioId : null,
+                    $nombre,
+                    $descripcion !== '' ? $descripcion : null,
+                    $monto,
+                    $estado,
+                    (int) $servicioEdit['id'],
+                ]);
+            } else {
+                $stmt = db()->prepare('INSERT INTO servicios (tipo_servicio_id, nombre, descripcion, monto, estado) VALUES (?, ?, ?, ?, ?)');
+                $stmt->execute([
+                    $tipoServicioId > 0 ? $tipoServicioId : null,
+                    $nombre,
+                    $descripcion !== '' ? $descripcion : null,
+                    $monto,
+                    $estado,
+                ]);
+            }
             redirect('cobros-servicios-agregar.php?success=1');
         } catch (Exception $e) {
             $errorMessage = 'No se pudo guardar el servicio. Verifica la base de datos.';
@@ -159,7 +200,7 @@ try {
                                         <select id="servicio-tipo" name="tipo_servicio_id" class="form-select">
                                             <option value="">Selecciona un tipo</option>
                                             <?php foreach ($tiposServicios as $tipo) : ?>
-                                                <option value="<?php echo (int) $tipo['id']; ?>">
+                                                <option value="<?php echo (int) $tipo['id']; ?>" <?php echo ($servicioEdit['tipo_servicio_id'] ?? 0) == (int) $tipo['id'] ? 'selected' : ''; ?>>
                                                     <?php echo htmlspecialchars($tipo['nombre'], ENT_QUOTES, 'UTF-8'); ?>
                                                 </option>
                                             <?php endforeach; ?>
@@ -170,27 +211,27 @@ try {
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="servicio-nombre">Nombre del servicio</label>
-                                        <input type="text" id="servicio-nombre" name="nombre" class="form-control" required>
+                                        <input type="text" id="servicio-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($servicioEdit['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="servicio-descripcion">Descripción</label>
-                                        <textarea id="servicio-descripcion" name="descripcion" class="form-control" rows="3"></textarea>
+                                        <textarea id="servicio-descripcion" name="descripcion" class="form-control" rows="3"><?php echo htmlspecialchars($servicioEdit['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="servicio-monto">Monto</label>
                                         <div class="input-group">
                                             <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" min="0" id="servicio-monto" name="monto" class="form-control" required>
+                                            <input type="number" step="0.01" min="0" id="servicio-monto" name="monto" class="form-control" value="<?php echo htmlspecialchars($servicioEdit['monto'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                         </div>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="servicio-estado">Estado</label>
                                         <select id="servicio-estado" name="estado" class="form-select">
-                                            <option value="1" selected>Activo</option>
-                                            <option value="0">Inactivo</option>
+                                            <option value="1" <?php echo ($servicioEdit['estado'] ?? 1) == 1 ? 'selected' : ''; ?>>Activo</option>
+                                            <option value="0" <?php echo isset($servicioEdit['estado']) && (int) $servicioEdit['estado'] === 0 ? 'selected' : ''; ?>>Inactivo</option>
                                         </select>
                                     </div>
-                                    <button type="submit" class="btn btn-primary w-100">Guardar servicio</button>
+                                    <button type="submit" class="btn btn-primary w-100"><?php echo $servicioEdit ? 'Actualizar servicio' : 'Guardar servicio'; ?></button>
                                 </form>
                             </div>
                         </div>
@@ -215,12 +256,13 @@ try {
                                                 <th>Monto</th>
                                                 <th>Estado</th>
                                                 <th>Creación</th>
+                                                <th class="text-end">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($servicios)) : ?>
                                                 <tr>
-                                                    <td colspan="6" class="text-center text-muted">Aún no hay servicios registrados.</td>
+                                                    <td colspan="7" class="text-center text-muted">Aún no hay servicios registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($servicios as $servicio) : ?>
@@ -237,6 +279,25 @@ try {
                                                             <?php endif; ?>
                                                         </td>
                                                         <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($servicio['created_at'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td class="text-end">
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-sm btn-soft-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                    Acciones
+                                                                </button>
+                                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                                    <li><a class="dropdown-item" href="cobros-servicios-agregar.php?id=<?php echo (int) $servicio['id']; ?>">Ver/Editar</a></li>
+                                                                    <li><hr class="dropdown-divider"></li>
+                                                                    <li>
+                                                                        <form method="post" class="px-3 py-1" data-confirm="¿Estás seguro de eliminar este servicio?">
+                                                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                                            <input type="hidden" name="action" value="delete">
+                                                                            <input type="hidden" name="id" value="<?php echo (int) $servicio['id']; ?>">
+                                                                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Eliminar</button>
+                                                                        </form>
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
+                                                        </td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>

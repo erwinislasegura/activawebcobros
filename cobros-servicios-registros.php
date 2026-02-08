@@ -109,7 +109,36 @@ if ($referenciaInput === '') {
     $referenciaInput = referencia_unica();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+    if ($deleteId > 0) {
+        try {
+            $stmt = db()->prepare('DELETE FROM cobros_servicios WHERE id = ?');
+            $stmt->execute([$deleteId]);
+            redirect('cobros-servicios-registros.php');
+        } catch (Exception $e) {
+            $errorMessage = 'No se pudo eliminar el cobro.';
+        } catch (Error $e) {
+            $errorMessage = 'No se pudo eliminar el cobro.';
+        }
+    }
+}
+
+$cobroEdit = null;
+if (isset($_GET['id'])) {
+    $editId = (int) $_GET['id'];
+    if ($editId > 0) {
+        try {
+            $stmt = db()->prepare('SELECT id, servicio_id, cliente_id, referencia, monto, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado FROM cobros_servicios WHERE id = ?');
+            $stmt->execute([$editId]);
+            $cobroEdit = $stmt->fetch() ?: null;
+        } catch (Exception $e) {
+        } catch (Error $e) {
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_csrf($_POST['csrf_token'] ?? null)) {
     $servicioId = (int) ($_POST['servicio_id'] ?? 0);
     $clienteId = (int) ($_POST['cliente_id'] ?? 0);
     $cliente = '';
@@ -157,19 +186,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
             $clienteStmt->execute([$clienteId]);
             $cliente = (string) ($clienteStmt->fetchColumn() ?: '');
 
-            $stmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente_id, cliente, referencia, monto, fecha_cobro, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([
-                $servicioId,
-                $clienteId > 0 ? $clienteId : null,
-                $cliente !== '' ? $cliente : 'Cliente sin nombre',
-                $referencia !== '' ? $referencia : null,
-                $monto,
-                $fechaCobro,
-                $fechaPrimerAviso !== '' ? $fechaPrimerAviso : null,
-                $fechaSegundoAviso !== '' ? $fechaSegundoAviso : null,
-                $fechaTercerAviso !== '' ? $fechaTercerAviso : null,
-                $estado,
-            ]);
+            if ($cobroEdit && isset($cobroEdit['id'])) {
+                $stmt = db()->prepare('UPDATE cobros_servicios SET servicio_id = ?, cliente_id = ?, cliente = ?, referencia = ?, monto = ?, fecha_cobro = ?, fecha_primer_aviso = ?, fecha_segundo_aviso = ?, fecha_tercer_aviso = ?, estado = ? WHERE id = ?');
+                $stmt->execute([
+                    $servicioId,
+                    $clienteId > 0 ? $clienteId : null,
+                    $cliente !== '' ? $cliente : 'Cliente sin nombre',
+                    $referencia !== '' ? $referencia : null,
+                    $monto,
+                    $fechaCobro,
+                    $fechaPrimerAviso !== '' ? $fechaPrimerAviso : null,
+                    $fechaSegundoAviso !== '' ? $fechaSegundoAviso : null,
+                    $fechaTercerAviso !== '' ? $fechaTercerAviso : null,
+                    $estado,
+                    (int) $cobroEdit['id'],
+                ]);
+            } else {
+                $stmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente_id, cliente, referencia, monto, fecha_cobro, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([
+                    $servicioId,
+                    $clienteId > 0 ? $clienteId : null,
+                    $cliente !== '' ? $cliente : 'Cliente sin nombre',
+                    $referencia !== '' ? $referencia : null,
+                    $monto,
+                    $fechaCobro,
+                    $fechaPrimerAviso !== '' ? $fechaPrimerAviso : null,
+                    $fechaSegundoAviso !== '' ? $fechaSegundoAviso : null,
+                    $fechaTercerAviso !== '' ? $fechaTercerAviso : null,
+                    $estado,
+                ]);
+            }
             redirect('cobros-servicios-registros.php?success=1');
         } catch (Exception $e) {
             $errorMessage = 'No se pudo registrar el cobro.';
@@ -265,9 +311,9 @@ try {
                                         <select id="cobro-servicio" name="servicio_id" class="form-select" required>
                                             <option value="">Selecciona un servicio</option>
                                             <?php foreach ($servicios as $servicio) : ?>
-                                                <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>">
-                                                    <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                </option>
+                                            <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </option>
                                             <?php endforeach; ?>
                                         </select>
                                         <?php if (empty($servicios)) : ?>
@@ -279,9 +325,9 @@ try {
                                         <select id="cobro-cliente" name="cliente_id" class="form-select" required>
                                             <option value="">Selecciona un cliente</option>
                                             <?php foreach ($clientes as $cliente) : ?>
-                                                <option value="<?php echo (int) $cliente['id']; ?>">
-                                                    <?php echo htmlspecialchars($cliente['codigo'] . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                </option>
+                                            <option value="<?php echo (int) $cliente['id']; ?>" <?php echo ($cobroEdit['cliente_id'] ?? 0) == (int) $cliente['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($cliente['codigo'] . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </option>
                                             <?php endforeach; ?>
                                         </select>
                                         <?php if (empty($clientes)) : ?>
@@ -290,39 +336,39 @@ try {
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-referencia">Referencia</label>
-                                        <input type="text" id="cobro-referencia" name="referencia" class="form-control" value="<?php echo htmlspecialchars($referenciaInput, ENT_QUOTES, 'UTF-8'); ?>" readonly>
+                                        <input type="text" id="cobro-referencia" name="referencia" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['referencia'] ?? $referenciaInput, ENT_QUOTES, 'UTF-8'); ?>" readonly>
                                         <small class="text-muted">Referencia única generada automáticamente.</small>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-monto">Monto cobrado</label>
                                         <div class="input-group">
                                             <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" min="0" id="cobro-monto" name="monto" class="form-control" required>
+                                            <input type="number" step="0.01" min="0" id="cobro-monto" name="monto" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['monto'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                         </div>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-primer-aviso">Fecha primer aviso</label>
-                                        <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" required>
+                                        <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_primer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                         <small class="text-muted">La fecha de cobro se iguala al primer aviso.</small>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-segundo-aviso">Fecha segundo aviso</label>
-                                        <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control">
+                                        <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_segundo_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-tercer-aviso">Fecha tercer aviso</label>
-                                        <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control">
+                                        <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_tercer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-estado">Estado</label>
                                         <select id="cobro-estado" name="estado" class="form-select">
-                                            <option value="Pendiente" selected>Pendiente</option>
-                                            <option value="Pagado">Pagado</option>
-                                            <option value="Anulado">Anulado</option>
+                                            <option value="Pendiente" <?php echo ($cobroEdit['estado'] ?? 'Pendiente') === 'Pendiente' ? 'selected' : ''; ?>>Pendiente</option>
+                                            <option value="Pagado" <?php echo ($cobroEdit['estado'] ?? '') === 'Pagado' ? 'selected' : ''; ?>>Pagado</option>
+                                            <option value="Anulado" <?php echo ($cobroEdit['estado'] ?? '') === 'Anulado' ? 'selected' : ''; ?>>Anulado</option>
                                         </select>
                                     </div>
                                     <button type="submit" class="btn btn-primary w-100" <?php echo empty($servicios) ? 'disabled' : ''; ?>>
-                                        Registrar cobro
+                                        <?php echo $cobroEdit ? 'Actualizar cobro' : 'Registrar cobro'; ?>
                                     </button>
                                 </form>
                             </div>
@@ -349,12 +395,13 @@ try {
                                                 <th>Fecha</th>
                                                 <th>Avisos</th>
                                                 <th>Estado</th>
+                                                <th class="text-end">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($cobros)) : ?>
                                                 <tr>
-                                                    <td colspan="7" class="text-center text-muted">No hay cobros registrados.</td>
+                                                    <td colspan="8" class="text-center text-muted">No hay cobros registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($cobros as $cobro) : ?>
@@ -388,6 +435,25 @@ try {
                                                                 <?php echo htmlspecialchars($cobro['estado'], ENT_QUOTES, 'UTF-8'); ?>
                                                             </span>
                                                         </td>
+                                                        <td class="text-end">
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-sm btn-soft-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                    Acciones
+                                                                </button>
+                                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                                    <li><a class="dropdown-item" href="cobros-servicios-registros.php?id=<?php echo (int) $cobro['id']; ?>">Ver/Editar</a></li>
+                                                                    <li><hr class="dropdown-divider"></li>
+                                                                    <li>
+                                                                        <form method="post" class="px-3 py-1" data-confirm="¿Estás seguro de eliminar este cobro?">
+                                                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                                            <input type="hidden" name="action" value="delete">
+                                                                            <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
+                                                                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Eliminar</button>
+                                                                        </form>
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
+                                                        </td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
@@ -410,12 +476,13 @@ try {
                                                 <th>Servicio</th>
                                                 <th>Fecha vencimiento</th>
                                                 <th>Estado</th>
+                                                <th class="text-end">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($cobros)) : ?>
                                                 <tr>
-                                                    <td colspan="4" class="text-center text-muted">No hay vencimientos registrados.</td>
+                                                    <td colspan="5" class="text-center text-muted">No hay vencimientos registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($cobros as $cobro) : ?>
@@ -429,6 +496,9 @@ try {
                                                         <td><?php echo htmlspecialchars($cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_cobro'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($cobro['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td class="text-end">
+                                                            <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php?id=<?php echo (int) $cobro['id']; ?>">Ver/Editar</a>
+                                                        </td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>

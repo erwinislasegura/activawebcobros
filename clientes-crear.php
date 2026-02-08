@@ -64,7 +64,36 @@ function color_por_codigo(string $codigo): string
     return '#' . substr(md5($codigo), 0, 6);
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+    if ($deleteId > 0) {
+        try {
+            $stmt = db()->prepare('DELETE FROM clientes WHERE id = ?');
+            $stmt->execute([$deleteId]);
+            redirect('clientes-crear.php');
+        } catch (Exception $e) {
+            $errorMessage = 'No se pudo eliminar el cliente.';
+        } catch (Error $e) {
+            $errorMessage = 'No se pudo eliminar el cliente.';
+        }
+    }
+}
+
+$clienteEdit = null;
+if (isset($_GET['id'])) {
+    $editId = (int) $_GET['id'];
+    if ($editId > 0) {
+        try {
+            $stmt = db()->prepare('SELECT id, nombre, correo, telefono, direccion, sitio_web, estado FROM clientes WHERE id = ?');
+            $stmt->execute([$editId]);
+            $clienteEdit = $stmt->fetch() ?: null;
+        } catch (Exception $e) {
+        } catch (Error $e) {
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_csrf($_POST['csrf_token'] ?? null)) {
     $nombre = trim($_POST['nombre'] ?? '');
     $correo = trim($_POST['correo'] ?? '');
     $telefono = trim($_POST['telefono'] ?? '');
@@ -78,28 +107,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
     if (empty($errors)) {
         try {
-            $codigo = generar_codigo_cliente();
-            $stmtCheck = db()->prepare('SELECT COUNT(*) FROM clientes WHERE codigo = ?');
-            while (true) {
-                $stmtCheck->execute([$codigo]);
-                if ((int) $stmtCheck->fetchColumn() === 0) {
-                    break;
-                }
+            if ($clienteEdit && isset($clienteEdit['id'])) {
+                $stmt = db()->prepare('UPDATE clientes SET nombre = ?, correo = ?, telefono = ?, direccion = ?, sitio_web = ?, estado = ? WHERE id = ?');
+                $stmt->execute([
+                    $nombre,
+                    $correo !== '' ? $correo : null,
+                    $telefono !== '' ? $telefono : null,
+                    $direccion !== '' ? $direccion : null,
+                    $sitioWeb !== '' ? $sitioWeb : null,
+                    $estado,
+                    (int) $clienteEdit['id'],
+                ]);
+            } else {
                 $codigo = generar_codigo_cliente();
-            }
+                $stmtCheck = db()->prepare('SELECT COUNT(*) FROM clientes WHERE codigo = ?');
+                while (true) {
+                    $stmtCheck->execute([$codigo]);
+                    if ((int) $stmtCheck->fetchColumn() === 0) {
+                        break;
+                    }
+                    $codigo = generar_codigo_cliente();
+                }
 
-            $colorHex = color_por_codigo($codigo);
-            $stmt = db()->prepare('INSERT INTO clientes (codigo, nombre, correo, telefono, direccion, sitio_web, color_hex, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-            $stmt->execute([
-                $codigo,
-                $nombre,
-                $correo !== '' ? $correo : null,
-                $telefono !== '' ? $telefono : null,
-                $direccion !== '' ? $direccion : null,
-                $sitioWeb !== '' ? $sitioWeb : null,
-                $colorHex,
-                $estado,
-            ]);
+                $colorHex = color_por_codigo($codigo);
+                $stmt = db()->prepare('INSERT INTO clientes (codigo, nombre, correo, telefono, direccion, sitio_web, color_hex, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([
+                    $codigo,
+                    $nombre,
+                    $correo !== '' ? $correo : null,
+                    $telefono !== '' ? $telefono : null,
+                    $direccion !== '' ? $direccion : null,
+                    $sitioWeb !== '' ? $sitioWeb : null,
+                    $colorHex,
+                    $estado,
+                ]);
+            }
             redirect('clientes-crear.php?success=1');
         } catch (Exception $e) {
             $errorMessage = 'No se pudo guardar el cliente.';
@@ -169,32 +211,32 @@ try {
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                     <div class="mb-3">
                                         <label class="form-label" for="cliente-nombre">Nombre</label>
-                                        <input type="text" id="cliente-nombre" name="nombre" class="form-control" required>
+                                        <input type="text" id="cliente-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cliente-correo">Correo</label>
-                                        <input type="email" id="cliente-correo" name="correo" class="form-control">
+                                        <input type="email" id="cliente-correo" name="correo" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['correo'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cliente-telefono">Teléfono</label>
-                                        <input type="text" id="cliente-telefono" name="telefono" class="form-control">
+                                        <input type="text" id="cliente-telefono" name="telefono" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['telefono'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cliente-direccion">Dirección</label>
-                                        <input type="text" id="cliente-direccion" name="direccion" class="form-control">
+                                        <input type="text" id="cliente-direccion" name="direccion" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['direccion'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cliente-sitio-web">Sitio web</label>
-                                        <input type="url" id="cliente-sitio-web" name="sitio_web" class="form-control" placeholder="https://">
+                                        <input type="url" id="cliente-sitio-web" name="sitio_web" class="form-control" placeholder="https://" value="<?php echo htmlspecialchars($clienteEdit['sitio_web'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cliente-estado">Estado</label>
                                         <select id="cliente-estado" name="estado" class="form-select">
-                                            <option value="1" selected>Activo</option>
-                                            <option value="0">Inactivo</option>
+                                            <option value="1" <?php echo ($clienteEdit['estado'] ?? 1) == 1 ? 'selected' : ''; ?>>Activo</option>
+                                            <option value="0" <?php echo isset($clienteEdit['estado']) && (int) $clienteEdit['estado'] === 0 ? 'selected' : ''; ?>>Inactivo</option>
                                         </select>
                                     </div>
-                                    <button type="submit" class="btn btn-primary w-100">Guardar cliente</button>
+                                    <button type="submit" class="btn btn-primary w-100"><?php echo $clienteEdit ? 'Actualizar cliente' : 'Guardar cliente'; ?></button>
                                 </form>
                             </div>
                         </div>
@@ -219,12 +261,13 @@ try {
                                                 <th>Sitio web</th>
                                                 <th>Color</th>
                                                 <th>Estado</th>
+                                                <th class="text-end">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($clientes)) : ?>
                                                 <tr>
-                                                    <td colspan="6" class="text-center text-muted">Aún no hay clientes registrados.</td>
+                                                    <td colspan="7" class="text-center text-muted">Aún no hay clientes registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($clientes as $cliente) : ?>
@@ -255,6 +298,25 @@ try {
                                                             <?php else : ?>
                                                                 <span class="badge text-bg-secondary">Inactivo</span>
                                                             <?php endif; ?>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-sm btn-soft-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                                    Acciones
+                                                                </button>
+                                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                                    <li><a class="dropdown-item" href="clientes-crear.php?id=<?php echo (int) $cliente['id']; ?>">Ver/Editar</a></li>
+                                                                    <li><hr class="dropdown-divider"></li>
+                                                                    <li>
+                                                                        <form method="post" class="px-3 py-1" data-confirm="¿Estás seguro de eliminar este cliente?">
+                                                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                                            <input type="hidden" name="action" value="delete">
+                                                                            <input type="hidden" name="id" value="<?php echo (int) $cliente['id']; ?>">
+                                                                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Eliminar</button>
+                                                                        </form>
+                                                                    </li>
+                                                                </ul>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 <?php endforeach; ?>
