@@ -1,0 +1,25 @@
+{
+  "name": "Go Muni",
+  "short_name": "Go Muni",
+  "description": "Go Muni · tecnologia escalable para la gestión de eventos, autoridades y validaciones ciudadanas.",
+  "start_url": "/index.php",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#6658dd",
+  "icons": [
+    {
+      "src": "/assets/images/logo-sm.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+@media (max-width: 992px) {
+  .content-page {
+    padding: 0.9rem;
+  }
+
+  .page-title-box {
+    padding: 0.75rem 0.75rem 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .card,
+  .gm-section {
+    border-radius: 1rem;
+  }
+
+  .btn,
+  .btn.btn-sm,
+  .btn.btn-lg {
+    min-height: 44px;
+    padding: 0.6rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .btn-group .btn,
+  .btn-group-vertical .btn {
+    min-height: 40px;
+  }
+
+  .form-label {
+    font-size: 0.85rem;
+  }
+
+  .form-control,
+  .form-select {
+    min-height: 44px;
+    padding: 0.65rem 0.85rem;
+    font-size: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  .input-group-text {
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.75rem;
+  }
+
+  .form-text {
+    font-size: 0.78rem;
+  }
+
+  .table-responsive {
+    border-radius: 0.9rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .table td,
+  .table th {
+    white-space: nowrap;
+  }
+
+  .list-group {
+    border-radius: 0.9rem;
+    overflow: hidden;
+  }
+
+  .list-group-item {
+    padding: 0.9rem 1rem;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .pagination .page-link {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .modal-footer {
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .app-topbar .logo-topbar img {
+    max-height: 48px;
+  }
+
+  .app-topbar .topbar-menu {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .page-title-box .page-title-right {
+    margin-top: 0.6rem;
+    width: 100%;
+  }
+
+  .page-title-box .breadcrumb {
+    flex-wrap: wrap;
+  }
+
+  .form-check {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .form-check-input {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+}

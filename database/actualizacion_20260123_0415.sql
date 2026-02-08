@@ -1,0 +1,3 @@
+ALTER TABLE `users`
+    ADD COLUMN IF NOT EXISTS `cargo` VARCHAR(100) DEFAULT NULL AFTER `apellido`,
+    ADD COLUMN IF NOT EXISTS `fecha_nacimiento` DATE DEFAULT NULL AFTER `cargo`;
