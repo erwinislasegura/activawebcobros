@@ -116,3 +116,16 @@
     height: 1.1rem;
   }
 }
+@media (min-width: 992px) {
+  body {
+    font-size: 0.9rem;
+  }
+
+  .page-title-head .fs-xl {
+    font-size: 1.35rem;
+  }
+
+  .page-title-box .breadcrumb {
+    font-size: 0.85rem;
+  }
+}
