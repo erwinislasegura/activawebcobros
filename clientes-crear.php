@@ -14,6 +14,7 @@ try {
             correo VARCHAR(150) NULL,
             telefono VARCHAR(50) NULL,
             direccion VARCHAR(180) NULL,
+            sitio_web VARCHAR(180) NULL,
             color_hex VARCHAR(10) NOT NULL,
             estado TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -24,6 +25,28 @@ try {
     $errorMessage = 'No se pudo preparar la tabla de clientes.';
 } catch (Error $e) {
     $errorMessage = 'No se pudo preparar la tabla de clientes.';
+}
+
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    $exists = (int) $stmt->fetchColumn() > 0;
+    if (!$exists) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
+
+try {
+    ensure_column('clientes', 'sitio_web', 'VARCHAR(180) NULL');
+} catch (Exception $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de clientes.';
+} catch (Error $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de clientes.';
 }
 
 function generar_codigo_cliente(): string
@@ -46,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     $correo = trim($_POST['correo'] ?? '');
     $telefono = trim($_POST['telefono'] ?? '');
     $direccion = trim($_POST['direccion'] ?? '');
+    $sitioWeb = trim($_POST['sitio_web'] ?? '');
     $estado = isset($_POST['estado']) && $_POST['estado'] === '0' ? 0 : 1;
 
     if ($nombre === '') {
@@ -65,13 +89,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
             }
 
             $colorHex = color_por_codigo($codigo);
-            $stmt = db()->prepare('INSERT INTO clientes (codigo, nombre, correo, telefono, direccion, color_hex, estado) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            $stmt = db()->prepare('INSERT INTO clientes (codigo, nombre, correo, telefono, direccion, sitio_web, color_hex, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $codigo,
                 $nombre,
                 $correo !== '' ? $correo : null,
                 $telefono !== '' ? $telefono : null,
                 $direccion !== '' ? $direccion : null,
+                $sitioWeb !== '' ? $sitioWeb : null,
                 $colorHex,
                 $estado,
             ]);
@@ -86,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
 $clientes = [];
 try {
-    $clientes = db()->query('SELECT id, codigo, nombre, correo, telefono, direccion, color_hex, estado, created_at FROM clientes ORDER BY id DESC')->fetchAll();
+    $clientes = db()->query('SELECT id, codigo, nombre, correo, telefono, direccion, sitio_web, color_hex, estado, created_at FROM clientes ORDER BY id DESC')->fetchAll();
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los clientes.';
 } catch (Error $e) {
@@ -159,6 +184,10 @@ try {
                                         <input type="text" id="cliente-direccion" name="direccion" class="form-control">
                                     </div>
                                     <div class="mb-3">
+                                        <label class="form-label" for="cliente-sitio-web">Sitio web</label>
+                                        <input type="url" id="cliente-sitio-web" name="sitio_web" class="form-control" placeholder="https://">
+                                    </div>
+                                    <div class="mb-3">
                                         <label class="form-label" for="cliente-estado">Estado</label>
                                         <select id="cliente-estado" name="estado" class="form-select">
                                             <option value="1" selected>Activo</option>
@@ -187,6 +216,7 @@ try {
                                                 <th>Código</th>
                                                 <th>Cliente</th>
                                                 <th>Contacto</th>
+                                                <th>Sitio web</th>
                                                 <th>Color</th>
                                                 <th>Estado</th>
                                             </tr>
@@ -194,7 +224,7 @@ try {
                                         <tbody>
                                             <?php if (empty($clientes)) : ?>
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">Aún no hay clientes registrados.</td>
+                                                    <td colspan="6" class="text-center text-muted">Aún no hay clientes registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($clientes as $cliente) : ?>
@@ -204,6 +234,15 @@ try {
                                                         <td>
                                                             <div><?php echo htmlspecialchars($cliente['correo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></div>
                                                             <small class="text-muted"><?php echo htmlspecialchars($cliente['telefono'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small>
+                                                        </td>
+                                                        <td>
+                                                            <?php if (!empty($cliente['sitio_web'])) : ?>
+                                                                <a href="<?php echo htmlspecialchars($cliente['sitio_web'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">
+                                                                    <?php echo htmlspecialchars($cliente['sitio_web'], ENT_QUOTES, 'UTF-8'); ?>
+                                                                </a>
+                                                            <?php else : ?>
+                                                                <span class="text-muted">-</span>
+                                                            <?php endif; ?>
                                                         </td>
                                                         <td>
                                                             <span class="badge" style="background-color: <?php echo htmlspecialchars($cliente['color_hex'], ENT_QUOTES, 'UTF-8'); ?>;">

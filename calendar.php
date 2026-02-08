@@ -68,34 +68,6 @@ try {
 } catch (Exception $e) {
 } catch (Error $e) {
 }
-
-try {
-    $stmtCobros = db()->query(
-        'SELECT cs.id,
-                cs.fecha_cobro,
-                COALESCE(c.nombre, cs.cliente) AS cliente,
-                s.nombre AS servicio,
-                c.color_hex AS color
-         FROM cobros_servicios cs
-         LEFT JOIN clientes c ON c.id = cs.cliente_id
-         LEFT JOIN servicios s ON s.id = cs.servicio_id
-         WHERE cs.fecha_cobro IS NOT NULL
-         ORDER BY cs.fecha_cobro'
-    );
-    foreach ($stmtCobros->fetchAll() as $cobro) {
-        $calendarEvents[] = [
-            'id' => 'cobro-' . (int) $cobro['id'],
-            'title' => sprintf('Vence: %s - %s', $cobro['cliente'], $cobro['servicio'] ?? 'Servicio'),
-            'start' => $cobro['fecha_cobro'],
-            'allDay' => true,
-            'backgroundColor' => $cobro['color'] ?: '#6c757d',
-            'borderColor' => $cobro['color'] ?: '#6c757d',
-            'url' => 'cobros-servicios-registros.php',
-        ];
-    }
-} catch (Exception $e) {
-} catch (Error $e) {
-}
 ?>
 <?php include('partials/html.php'); ?>
 

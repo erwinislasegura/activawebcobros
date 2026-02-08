@@ -168,6 +168,9 @@
                             <li class="side-nav-item">
                                 <a href="configuracion-email.php" class="side-nav-link">Correo validación</a>
                             </li>
+                            <li class="side-nav-item">
+                                <a href="configuracion-avisos.php" class="side-nav-link">Plantillas de avisos</a>
+                            </li>
                         </ul>
                     </div>
                 </li>

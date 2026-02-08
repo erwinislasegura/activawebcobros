@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     $cliente = '';
     $referencia = trim($_POST['referencia'] ?? '');
     $monto = trim($_POST['monto'] ?? '');
-    $fechaCobro = trim($_POST['fecha_cobro'] ?? '');
+    $fechaCobro = '';
     $fechaPrimerAviso = trim($_POST['fecha_primer_aviso'] ?? '');
     $fechaSegundoAviso = trim($_POST['fecha_segundo_aviso'] ?? '');
     $fechaTercerAviso = trim($_POST['fecha_tercer_aviso'] ?? '');
@@ -130,13 +130,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     if ($monto === '' || !is_numeric($monto) || (float) $monto < 0) {
         $errors[] = 'Ingresa un monto válido.';
     }
-    if ($fechaCobro === '') {
-        $errors[] = 'Selecciona la fecha de cobro.';
+    if ($fechaPrimerAviso === '') {
+        $errors[] = 'Selecciona la fecha del primer aviso.';
     }
     if ($estado === '') {
         $errors[] = 'Selecciona un estado.';
     }
 
+    if ($fechaPrimerAviso !== '') {
+        $fechaCobro = $fechaPrimerAviso;
+    }
     if ($fechaPrimerAviso !== '' && $fechaSegundoAviso === '') {
         $fechaSegundoAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +2 days'));
     }
@@ -298,12 +301,9 @@ try {
                                         </div>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label" for="cobro-fecha">Fecha de cobro</label>
-                                        <input type="date" id="cobro-fecha" name="fecha_cobro" class="form-control" required>
-                                    </div>
-                                    <div class="mb-3">
                                         <label class="form-label" for="cobro-primer-aviso">Fecha primer aviso</label>
-                                        <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control">
+                                        <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" required>
+                                        <small class="text-muted">La fecha de cobro se iguala al primer aviso.</small>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label" for="cobro-segundo-aviso">Fecha segundo aviso</label>
