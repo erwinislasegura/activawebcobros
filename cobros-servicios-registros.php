@@ -306,70 +306,74 @@ try {
                                 <?php endif; ?>
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-servicio">Servicio</label>
-                                        <select id="cobro-servicio" name="servicio_id" class="form-select" required>
-                                            <option value="">Selecciona un servicio</option>
-                                            <?php foreach ($servicios as $servicio) : ?>
-                                            <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                            </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <?php if (empty($servicios)) : ?>
-                                            <small class="text-muted d-block mt-2">Primero registra servicios activos en "Agregar servicio".</small>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-cliente">Cliente</label>
-                                        <select id="cobro-cliente" name="cliente_id" class="form-select" required>
-                                            <option value="">Selecciona un cliente</option>
-                                            <?php foreach ($clientes as $cliente) : ?>
-                                            <option value="<?php echo (int) $cliente['id']; ?>" <?php echo ($cobroEdit['cliente_id'] ?? 0) == (int) $cliente['id'] ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($cliente['codigo'] . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                            </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <?php if (empty($clientes)) : ?>
-                                            <small class="text-muted d-block mt-2">Primero registra clientes en "Crear cliente".</small>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-referencia">Referencia</label>
-                                        <input type="text" id="cobro-referencia" name="referencia" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['referencia'] ?? $referenciaInput, ENT_QUOTES, 'UTF-8'); ?>" readonly>
-                                        <small class="text-muted">Referencia única generada automáticamente.</small>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-monto">Monto cobrado</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" min="0" id="cobro-monto" name="monto" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['monto'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="cobro-servicio">Servicio</label>
+                                            <select id="cobro-servicio" name="servicio_id" class="form-select" required>
+                                                <option value="">Selecciona un servicio</option>
+                                                <?php foreach ($servicios as $servicio) : ?>
+                                                <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <?php if (empty($servicios)) : ?>
+                                                <small class="text-muted d-block mt-2">Primero registra servicios activos en "Agregar servicio".</small>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="cobro-cliente">Cliente</label>
+                                            <select id="cobro-cliente" name="cliente_id" class="form-select" required>
+                                                <option value="">Selecciona un cliente</option>
+                                                <?php foreach ($clientes as $cliente) : ?>
+                                                <option value="<?php echo (int) $cliente['id']; ?>" <?php echo ($cobroEdit['cliente_id'] ?? 0) == (int) $cliente['id'] ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($cliente['codigo'] . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <?php if (empty($clientes)) : ?>
+                                                <small class="text-muted d-block mt-2">Primero registra clientes en "Crear cliente".</small>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="cobro-referencia">Referencia</label>
+                                            <input type="text" id="cobro-referencia" name="referencia" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['referencia'] ?? $referenciaInput, ENT_QUOTES, 'UTF-8'); ?>" readonly>
+                                            <small class="text-muted">Referencia única generada automáticamente.</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="cobro-monto">Monto cobrado</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" step="0.01" min="0" id="cobro-monto" name="monto" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['monto'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="cobro-primer-aviso">Fecha primer aviso</label>
+                                            <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_primer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                            <small class="text-muted">La fecha de cobro se iguala al primer aviso.</small>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="cobro-segundo-aviso">Fecha segundo aviso</label>
+                                            <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_segundo_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="cobro-tercer-aviso">Fecha tercer aviso</label>
+                                            <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_tercer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label" for="cobro-estado">Estado</label>
+                                            <select id="cobro-estado" name="estado" class="form-select">
+                                                <option value="Pendiente" <?php echo ($cobroEdit['estado'] ?? 'Pendiente') === 'Pendiente' ? 'selected' : ''; ?>>Pendiente</option>
+                                                <option value="Pagado" <?php echo ($cobroEdit['estado'] ?? '') === 'Pagado' ? 'selected' : ''; ?>>Pagado</option>
+                                                <option value="Anulado" <?php echo ($cobroEdit['estado'] ?? '') === 'Anulado' ? 'selected' : ''; ?>>Anulado</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="submit" class="btn btn-primary w-100" <?php echo empty($servicios) ? 'disabled' : ''; ?>>
+                                                <?php echo $cobroEdit ? 'Actualizar cobro' : 'Registrar cobro'; ?>
+                                            </button>
                                         </div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-primer-aviso">Fecha primer aviso</label>
-                                        <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_primer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
-                                        <small class="text-muted">La fecha de cobro se iguala al primer aviso.</small>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-segundo-aviso">Fecha segundo aviso</label>
-                                        <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_segundo_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-tercer-aviso">Fecha tercer aviso</label>
-                                        <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_tercer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="cobro-estado">Estado</label>
-                                        <select id="cobro-estado" name="estado" class="form-select">
-                                            <option value="Pendiente" <?php echo ($cobroEdit['estado'] ?? 'Pendiente') === 'Pendiente' ? 'selected' : ''; ?>>Pendiente</option>
-                                            <option value="Pagado" <?php echo ($cobroEdit['estado'] ?? '') === 'Pagado' ? 'selected' : ''; ?>>Pagado</option>
-                                            <option value="Anulado" <?php echo ($cobroEdit['estado'] ?? '') === 'Anulado' ? 'selected' : ''; ?>>Anulado</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary w-100" <?php echo empty($servicios) ? 'disabled' : ''; ?>>
-                                        <?php echo $cobroEdit ? 'Actualizar cobro' : 'Registrar cobro'; ?>
-                                    </button>
                                 </form>
                             </div>
                         </div>

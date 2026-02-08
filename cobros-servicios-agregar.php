@@ -195,43 +195,47 @@ try {
                                 <?php endif; ?>
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <div class="mb-3">
-                                        <label class="form-label" for="servicio-tipo">Tipo de servicio</label>
-                                        <select id="servicio-tipo" name="tipo_servicio_id" class="form-select">
-                                            <option value="">Selecciona un tipo</option>
-                                            <?php foreach ($tiposServicios as $tipo) : ?>
-                                                <option value="<?php echo (int) $tipo['id']; ?>" <?php echo ($servicioEdit['tipo_servicio_id'] ?? 0) == (int) $tipo['id'] ? 'selected' : ''; ?>>
-                                                    <?php echo htmlspecialchars($tipo['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <?php if (empty($tiposServicios)) : ?>
-                                            <small class="text-muted d-block mt-2">Primero registra tipos en "Tipos de servicios".</small>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="servicio-nombre">Nombre del servicio</label>
-                                        <input type="text" id="servicio-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($servicioEdit['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="servicio-descripcion">Descripción</label>
-                                        <textarea id="servicio-descripcion" name="descripcion" class="form-control" rows="3"><?php echo htmlspecialchars($servicioEdit['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="servicio-monto">Monto</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">$</span>
-                                            <input type="number" step="0.01" min="0" id="servicio-monto" name="monto" class="form-control" value="<?php echo htmlspecialchars($servicioEdit['monto'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="servicio-tipo">Tipo de servicio</label>
+                                            <select id="servicio-tipo" name="tipo_servicio_id" class="form-select">
+                                                <option value="">Selecciona un tipo</option>
+                                                <?php foreach ($tiposServicios as $tipo) : ?>
+                                                    <option value="<?php echo (int) $tipo['id']; ?>" <?php echo ($servicioEdit['tipo_servicio_id'] ?? 0) == (int) $tipo['id'] ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($tipo['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <?php if (empty($tiposServicios)) : ?>
+                                                <small class="text-muted d-block mt-2">Primero registra tipos en "Tipos de servicios".</small>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="servicio-nombre">Nombre del servicio</label>
+                                            <input type="text" id="servicio-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($servicioEdit['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label" for="servicio-descripcion">Descripción</label>
+                                            <textarea id="servicio-descripcion" name="descripcion" class="form-control" rows="3"><?php echo htmlspecialchars($servicioEdit['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="servicio-monto">Monto</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" step="0.01" min="0" id="servicio-monto" name="monto" class="form-control" value="<?php echo htmlspecialchars($servicioEdit['monto'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="servicio-estado">Estado</label>
+                                            <select id="servicio-estado" name="estado" class="form-select">
+                                                <option value="1" <?php echo ($servicioEdit['estado'] ?? 1) == 1 ? 'selected' : ''; ?>>Activo</option>
+                                                <option value="0" <?php echo isset($servicioEdit['estado']) && (int) $servicioEdit['estado'] === 0 ? 'selected' : ''; ?>>Inactivo</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="submit" class="btn btn-primary w-100"><?php echo $servicioEdit ? 'Actualizar servicio' : 'Guardar servicio'; ?></button>
                                         </div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label" for="servicio-estado">Estado</label>
-                                        <select id="servicio-estado" name="estado" class="form-select">
-                                            <option value="1" <?php echo ($servicioEdit['estado'] ?? 1) == 1 ? 'selected' : ''; ?>>Activo</option>
-                                            <option value="0" <?php echo isset($servicioEdit['estado']) && (int) $servicioEdit['estado'] === 0 ? 'selected' : ''; ?>>Inactivo</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary w-100"><?php echo $servicioEdit ? 'Actualizar servicio' : 'Guardar servicio'; ?></button>
                                 </form>
                             </div>
                         </div>
