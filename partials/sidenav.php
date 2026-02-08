@@ -43,87 +43,62 @@
         <ul class="side-nav">
             <li class="side-nav-title mt-2" data-lang="menu-title">Gestión</li>
 
-            <?php if (has_permission('eventos', 'view')) : ?>
-                <li class="side-nav-item">
-                    <a href="#modulo-eventos" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-eventos">
-                        <span class="menu-icon"><i data-lucide="calendar-check"></i></span>
-                        <span class="menu-text">Gestión eventos</span>
-                        <span class="menu-arrow"></span>
-                    </a>
-                    <div class="collapse" id="modulo-eventos">
-                        <ul class="side-nav sub-menu">
-                            <?php if (has_permission('eventos', 'create')) : ?>
-                                <li class="side-nav-item">
-                                    <a href="eventos-editar.php" class="side-nav-link">Nuevo evento</a>
-                                </li>
-                            <?php endif; ?>
-                            <li class="side-nav-item">
-                                <a href="eventos-invitacion-autoridades.php" class="side-nav-link">Invitar autoridades</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="eventos-autoridades-nueva.php" class="side-nav-link">Autoridades evento</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="eventos-acreditacion-medios.php" class="side-nav-link">Acreditación medios</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="eventos-autoridades-resumen.php" class="side-nav-link">Resumen eventos</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="eventos-procesados.php" class="side-nav-link">Procesados</a>
-                            </li>
-                        </ul>
-                    </div>
-                </li>
-            <?php endif; ?>
-
-            <?php if (has_permission('eventos', 'view')) : ?>
-                <li class="side-nav-item">
-                    <a href="#modulo-medios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-medios">
-                        <span class="menu-icon"><i data-lucide="megaphone"></i></span>
-                        <span class="menu-text">Medios de comunicación</span>
-                        <span class="menu-arrow"></span>
-                    </a>
-                    <div class="collapse" id="modulo-medios">
-                        <ul class="side-nav sub-menu">
-                            <li class="side-nav-item">
-                                <a href="eventos-acreditacion-medios.php" class="side-nav-link">Solicitudes de medios</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="medios-control-acceso.php" class="side-nav-link">Control de acceso</a>
-                            </li>
-                        </ul>
-                    </div>
-                </li>
-            <?php endif; ?>
-
-            <?php if (has_permission('autoridades', 'view')) : ?>
-                <li class="side-nav-item">
-                    <a href="#modulo-autoridades" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-autoridades">
-                        <span class="menu-icon"><i data-lucide="landmark"></i></span>
-                        <span class="menu-text">Autoridades</span>
-                        <span class="menu-arrow"></span>
-                    </a>
-                    <div class="collapse" id="modulo-autoridades">
-                        <ul class="side-nav sub-menu">
-                            <?php if (has_permission('autoridades', 'create')) : ?>
-                                <li class="side-nav-item">
-                                    <a href="autoridades-editar.php" class="side-nav-link">Crear autoridad</a>
-                                </li>
-                                <li class="side-nav-item">
-                                    <a href="autoridades-carga-masiva.php" class="side-nav-link">Carga masiva</a>
-                                </li>
-                            <?php endif; ?>
-                        </ul>
-                    </div>
-                </li>
-            <?php endif; ?>
-
             <li class="side-nav-item">
                 <a href="calendar.php" class="side-nav-link">
                     <span class="menu-icon"><i data-lucide="calendar"></i></span>
                     <span class="menu-text">Calendario</span>
                 </a>
+            </li>
+
+            <li class="side-nav-item">
+                <a href="#modulo-servicios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-servicios">
+                    <span class="menu-icon"><i data-lucide="briefcase"></i></span>
+                    <span class="menu-text">Servicios</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-servicios">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item">
+                            <a href="cobros-servicios-agregar.php" class="side-nav-link">Crear servicios</a>
+                        </li>
+                        <li class="side-nav-item">
+                            <a href="tipos-servicios.php" class="side-nav-link">Tipos de servicios</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            <li class="side-nav-item">
+                <a href="#modulo-cobros-servicios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-cobros-servicios">
+                    <span class="menu-icon"><i data-lucide="receipt"></i></span>
+                    <span class="menu-text">Cobros de servicios</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-cobros-servicios">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item">
+                            <a href="cobros-servicios-registros.php" class="side-nav-link">Registros de cobros</a>
+                        </li>
+                        <li class="side-nav-item">
+                            <a href="cobros-avisos.php" class="side-nav-link">Listado de avisos</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            <li class="side-nav-item">
+                <a href="#modulo-clientes" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-clientes">
+                    <span class="menu-icon"><i data-lucide="users-2"></i></span>
+                    <span class="menu-text">Clientes</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-clientes">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item">
+                            <a href="clientes-crear.php" class="side-nav-link">Crear cliente</a>
+                        </li>
+                    </ul>
+                </div>
             </li>
 
             <li class="side-nav-title" data-lang="settings-title">Administración</li>
@@ -173,19 +148,13 @@
                 <li class="side-nav-item">
                     <a href="#modulo-mantenedores" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-mantenedores">
                         <span class="menu-icon"><i data-lucide="settings-2"></i></span>
-                        <span class="menu-text">Mantenedores</span>
+                        <span class="menu-text">Configuración</span>
                         <span class="menu-arrow"></span>
                     </a>
                     <div class="collapse" id="modulo-mantenedores">
                         <ul class="side-nav sub-menu">
                             <li class="side-nav-item">
-                                <a href="municipalidad.php" class="side-nav-link">Municipalidad</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="eventos-tipos.php" class="side-nav-link">Tipos evento</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="grupos-autoridades.php" class="side-nav-link">Grupos autoridades</a>
+                                <a href="municipalidad.php" class="side-nav-link">Configurar empresa</a>
                             </li>
                             <li class="side-nav-item">
                                 <a href="notificaciones-correo.php" class="side-nav-link">Correo de envío</a>
@@ -198,6 +167,9 @@
                             </li>
                             <li class="side-nav-item">
                                 <a href="configuracion-email.php" class="side-nav-link">Correo validación</a>
+                            </li>
+                            <li class="side-nav-item">
+                                <a href="configuracion-avisos.php" class="side-nav-link">Plantillas de avisos</a>
                             </li>
                         </ul>
                     </div>
