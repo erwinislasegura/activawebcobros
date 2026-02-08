@@ -1,5 +1,6 @@
 -- Actualización: sitio web cliente y plantillas de avisos
 -- Fecha: 2026-03-23
+-- ----------------------------------------------
 
 ALTER TABLE `clientes`
   ADD COLUMN IF NOT EXISTS `sitio_web` VARCHAR(180) DEFAULT NULL;
