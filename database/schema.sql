@@ -363,11 +363,28 @@ CREATE TABLE `cobros_servicios` (
   `fecha_primer_aviso` DATE DEFAULT NULL,
   `fecha_segundo_aviso` DATE DEFAULT NULL,
   `fecha_tercer_aviso` DATE DEFAULT NULL,
+  `aviso_1_enviado_at` DATETIME DEFAULT NULL,
+  `aviso_2_enviado_at` DATETIME DEFAULT NULL,
+  `aviso_3_enviado_at` DATETIME DEFAULT NULL,
   `estado` VARCHAR(40) NOT NULL DEFAULT 'Pendiente',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cobros_servicios_servicio_idx` (`servicio_id`),
   KEY `cobros_servicios_cliente_idx` (`cliente_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `pagos_clientes` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `cobro_id` INT NOT NULL,
+  `cliente_id` INT DEFAULT NULL,
+  `servicio_id` INT DEFAULT NULL,
+  `monto` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `fecha_pago` DATE NOT NULL,
+  `metodo` VARCHAR(60) DEFAULT NULL,
+  `referencia_pago` VARCHAR(120) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_pagos_cobro` (`cobro_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `municipalidad` (`nombre`, `rut`, `direccion`, `telefono`, `correo`, `logo_path`, `color_primary`, `color_secondary`)

@@ -74,6 +74,9 @@ try {
     ensure_column('cobros_servicios', 'fecha_primer_aviso', 'DATE NULL');
     ensure_column('cobros_servicios', 'fecha_segundo_aviso', 'DATE NULL');
     ensure_column('cobros_servicios', 'fecha_tercer_aviso', 'DATE NULL');
+    ensure_column('cobros_servicios', 'aviso_1_enviado_at', 'DATETIME NULL');
+    ensure_column('cobros_servicios', 'aviso_2_enviado_at', 'DATETIME NULL');
+    ensure_column('cobros_servicios', 'aviso_3_enviado_at', 'DATETIME NULL');
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de cobros.';
 } catch (Error $e) {
@@ -243,6 +246,9 @@ try {
                 cs.fecha_primer_aviso,
                 cs.fecha_segundo_aviso,
                 cs.fecha_tercer_aviso,
+                cs.aviso_1_enviado_at,
+                cs.aviso_2_enviado_at,
+                cs.aviso_3_enviado_at,
                 cs.estado,
                 cs.created_at,
                 s.nombre AS servicio
@@ -470,8 +476,8 @@ try {
                         </div>
                         <div class="card mt-3">
                             <div class="card-header">
-                                <h5 class="card-title mb-0">Vencimientos por cliente</h5>
-                                <p class="text-muted mb-0">Una fila por servicio con su fecha de vencimiento.</p>
+                                <h5 class="card-title mb-0">Avisos por cliente</h5>
+                                <p class="text-muted mb-0">Envía los avisos programados desde cada cobro.</p>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
@@ -480,18 +486,40 @@ try {
                                             <tr>
                                                 <th>Cliente</th>
                                                 <th>Servicio</th>
-                                                <th>Fecha vencimiento</th>
-                                                <th>Estado</th>
-                                                <th class="text-end">Acciones</th>
+                                                <th>Correo</th>
+                                                <th>Avisos</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($cobros)) : ?>
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">No hay vencimientos registrados.</td>
+                                                    <td colspan="4" class="text-center text-muted">No hay avisos registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($cobros as $cobro) : ?>
+                                                    <?php
+                                                    $avisos = [
+                                                        [
+                                                            'key' => 'aviso_1',
+                                                            'label' => 'Aviso 1',
+                                                            'fecha' => $cobro['fecha_primer_aviso'] ?? null,
+                                                            'sent' => $cobro['aviso_1_enviado_at'] ?? null,
+                                                        ],
+                                                        [
+                                                            'key' => 'aviso_2',
+                                                            'label' => 'Aviso 2',
+                                                            'fecha' => $cobro['fecha_segundo_aviso'] ?? null,
+                                                            'sent' => $cobro['aviso_2_enviado_at'] ?? null,
+                                                        ],
+                                                        [
+                                                            'key' => 'aviso_3',
+                                                            'label' => 'Aviso 3',
+                                                            'fecha' => $cobro['fecha_tercer_aviso'] ?? null,
+                                                            'sent' => $cobro['aviso_3_enviado_at'] ?? null,
+                                                        ],
+                                                    ];
+                                                    $correoCliente = $cobro['cliente_correo'] ?? '';
+                                                    ?>
                                                     <tr>
                                                         <td>
                                                             <span class="badge" style="background-color: <?php echo htmlspecialchars($cobro['cliente_color'] ?? '#6c757d', ENT_QUOTES, 'UTF-8'); ?>;">
@@ -500,10 +528,39 @@ try {
                                                             <?php echo htmlspecialchars($cobro['cliente'], ENT_QUOTES, 'UTF-8'); ?>
                                                         </td>
                                                         <td><?php echo htmlspecialchars($cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_cobro'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td><?php echo htmlspecialchars($cobro['estado'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td class="text-end">
-                                                            <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php?id=<?php echo (int) $cobro['id']; ?>">Ver/Editar</a>
+                                                        <td><?php echo htmlspecialchars($correoCliente !== '' ? $correoCliente : 'Sin correo', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td>
+                                                            <div class="d-flex flex-column gap-2">
+                                                                <?php foreach ($avisos as $aviso) : ?>
+                                                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                                                        <span class="badge text-bg-light"><?php echo htmlspecialchars($aviso['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                                                        <span class="text-muted small">
+                                                                            <?php echo $aviso['fecha'] ? htmlspecialchars(date('d/m/Y', strtotime($aviso['fecha'])), ENT_QUOTES, 'UTF-8') : 'Sin fecha'; ?>
+                                                                        </span>
+                                                                        <?php if (!empty($aviso['sent'])) : ?>
+                                                                            <span class="badge text-bg-success">Enviado</span>
+                                                                            <span class="text-muted small">
+                                                                                <?php echo htmlspecialchars(date('d/m/Y H:i', strtotime($aviso['sent'])), ENT_QUOTES, 'UTF-8'); ?>
+                                                                            </span>
+                                                                        <?php else : ?>
+                                                                            <span class="badge text-bg-warning">Pendiente</span>
+                                                                        <?php endif; ?>
+                                                                        <form method="post" action="cobros-avisos.php" class="d-inline">
+                                                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                                            <input type="hidden" name="action" value="send_aviso">
+                                                                            <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
+                                                                            <input type="hidden" name="tipo" value="<?php echo htmlspecialchars($aviso['key'], ENT_QUOTES, 'UTF-8'); ?>">
+                                                                            <input type="hidden" name="return_url" value="cobros-servicios-registros.php">
+                                                                            <?php
+                                                                            $disabled = $correoCliente === '' || $aviso['fecha'] === null || $aviso['fecha'] === '';
+                                                                            ?>
+                                                                            <button type="submit" class="btn btn-sm btn-outline-primary" <?php echo $disabled ? 'disabled' : ''; ?>>
+                                                                                <?php echo !empty($aviso['sent']) ? 'Reenviar' : 'Enviar'; ?>
+                                                                            </button>
+                                                                        </form>
+                                                                    </div>
+                                                                <?php endforeach; ?>
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 <?php endforeach; ?>
