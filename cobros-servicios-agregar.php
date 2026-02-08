@@ -179,7 +179,7 @@ try {
                 <?php endif; ?>
 
                 <div class="row">
-                    <div class="col-lg-5">
+                    <div class="col-12">
                         <div class="card">
                             <div class="card-header">
                                 <h5 class="card-title mb-0">Nuevo servicio</h5>
@@ -236,7 +236,9 @@ try {
                             </div>
                         </div>
                     </div>
-                    <div class="col-lg-7">
+                </div>
+                <div class="row">
+                    <div class="col-12">
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between gap-2">
                                 <div>
