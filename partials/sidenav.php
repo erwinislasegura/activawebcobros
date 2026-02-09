@@ -89,7 +89,7 @@
                 </div>
             </li>
 
-            <?php if (has_permission('flow', 'view')) : ?>
+            <?php if (flow_user_can_access() && has_permission('flow', 'view')) : ?>
                 <li class="side-nav-item">
                     <a href="#modulo-flow" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-flow">
                         <span class="menu-icon"><i data-lucide="credit-card"></i></span>
@@ -99,13 +99,16 @@
                     <div class="collapse" id="modulo-flow">
                         <ul class="side-nav sub-menu">
                             <li class="side-nav-item">
-                                <a href="flow-config.php" class="side-nav-link">Configuración</a>
+                                <a href="flow/config/index.php" class="side-nav-link">Configuración</a>
                             </li>
                             <li class="side-nav-item">
-                                <a href="flow-payments-new.php" class="side-nav-link">Crear pago</a>
+                                <a href="flow/payments/new.php" class="side-nav-link">Crear pago</a>
                             </li>
                             <li class="side-nav-item">
-                                <a href="flow-payments-list.php" class="side-nav-link">Órdenes / Estados</a>
+                                <a href="flow/orders/index.php" class="side-nav-link">Órdenes / Estados</a>
+                            </li>
+                            <li class="side-nav-item">
+                                <a href="flow/webhook/logs.php" class="side-nav-link">Logs Webhook</a>
                             </li>
                         </ul>
                     </div>
