@@ -65,7 +65,7 @@ function append_payment_button(string $bodyHtml, string $link): string
         return $bodyHtml;
     }
 
-    if (str_contains($bodyHtml, $link)) {
+    if (str_contains($bodyHtml, $link) || str_contains($bodyHtml, 'Pagar ahora')) {
         return $bodyHtml;
     }
 
@@ -81,6 +81,12 @@ function append_payment_button(string $bodyHtml, string $link): string
   </tr>
 </table>
 HTML;
+
+    $footerMarker = "          <tr>\n            <td style=\"padding:16px 24px 22px 24px";
+    if (str_contains($bodyHtml, $footerMarker)) {
+        $insertion = "          <tr>\n            <td style=\"padding:0 24px 0 24px;\">\n{$buttonHtml}\n            </td>\n          </tr>\n";
+        return str_replace($footerMarker, $insertion . $footerMarker, $bodyHtml);
+    }
 
     if (str_contains($bodyHtml, '</body>')) {
         return str_replace('</body>', $buttonHtml . "\n</body>", $bodyHtml);
