@@ -118,7 +118,7 @@
     <div class="email-wrapper">
         <div class="email-content">
             <div class="email-header">
-                <a href="#"><img src="assets/images/logo.png" alt="Go Muni" /></a>
+                <a href="#"><img src="assets/images/logo.png" alt="Go Cobros" /></a>
                 <span>Exciting New Features Just Launched!</span>
             </div>
             <div class="email-body">
@@ -159,7 +159,7 @@
                     <a href="#" class="btn">Explore the Update</a>
                 </p>
 
-                <p>Thank you for being a valued member of the <strong>Go Muni</strong> community!</p>
+                <p>Thank you for being a valued member of the <strong>Go Cobros</strong> community!</p>
             </div>
             <div class="email-footer">
                 <a href="#">Unsubscribe</a> or <a href="#">Contact Support</a>

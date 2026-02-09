@@ -84,18 +84,18 @@
   <div class="email-wrapper">
     <div class="email-content">
       <div class="email-header">
-        <a href="#"><img src="assets/images/logo.png" alt="Go Muni" /></a>
+        <a href="#"><img src="assets/images/logo.png" alt="Go Cobros" /></a>
         <span>Welcome! Your account has been successfully activated.</span>
       </div>
       <div class="email-body">
         <p>Hi there,</p>
-        <p>We're excited to have you on board. Your <strong>Go Muni account</strong> is now active and ready to use.</p>
+        <p>We're excited to have you on board. Your <strong>Go Cobros account</strong> is now active and ready to use.</p>
         <p>Click the button below to access your dashboard and start exploring the features.</p>
         <p style="text-align: center;">
           <a href="#" class="btn">Go to Dashboard</a>
         </p>
         <p>If you need any help, feel free to reach out to our support team anytime.</p>
-        <p>Cheers,<br><b>Go Muni Team</b></p>
+        <p>Cheers,<br><b>Go Cobros Team</b></p>
       </div>
       <div class="email-footer">
         <a href="#">Contact Support</a> for assistance.

@@ -91,7 +91,7 @@
     <div class="email-wrapper">
         <div class="email-content">
             <div class="email-header">
-                <a href="#"><img src="assets/images/logo.png" alt="Go Muni" /></a>
+                <a href="#"><img src="assets/images/logo.png" alt="Go Cobros" /></a>
             </div>
             <div class="email-body">
                 <h2>Confirm Your Email</h2>
@@ -100,7 +100,7 @@
                 <p style="text-align: center;">
                     <a href="#" class="btn">Confirm Email Address</a>
                 </p>
-                <p>— <b>Go Muni</b> Admin Dashboard Team</p>
+                <p>— <b>Go Cobros</b> Admin Dashboard Team</p>
             </div>
             <div class="email-footer">
                 If you did not request this, please ignore this email. <br />
