@@ -9,74 +9,68 @@ if (!isset($_SESSION['user'])) {
 }
 
 $stats = [
-    'events_total' => 0,
-    'events_upcoming' => 0,
-    'authorities_total' => 0,
-    'users_total' => 0,
-    'validation_requests' => 0,
-    'validation_responded' => 0,
-    'validation_pending' => 0,
+    'pending_amount' => 0.0,
+    'paid_amount' => 0.0,
+    'collections_total' => 0,
+    'collections_paid' => 0,
+    'collections_pending' => 0,
+    'clients_total' => 0,
+    'clients_active' => 0,
 ];
-$upcomingEvents = [];
-$recentValidations = [];
-$eventsByMonth = [];
-$validationsByMonth = [];
-$authoritiesByGroup = [];
+$upcomingCollections = [];
+$recentPayments = [];
+$collectionsByMonth = [];
+$paymentsByMonth = [];
 $monthLabels = [];
 
 try {
-    $stats['events_total'] = (int) db()->query('SELECT COUNT(*) FROM events')->fetchColumn();
-    $stats['events_upcoming'] = (int) db()->query('SELECT COUNT(*) FROM events WHERE fecha_inicio >= NOW()')->fetchColumn();
-    $stats['authorities_total'] = (int) db()->query('SELECT COUNT(*) FROM authorities')->fetchColumn();
-    $stats['users_total'] = (int) db()->query('SELECT COUNT(*) FROM users')->fetchColumn();
-    $stats['validation_requests'] = (int) db()->query('SELECT COUNT(*) FROM event_authority_requests')->fetchColumn();
-    $stats['validation_responded'] = (int) db()->query('SELECT COUNT(*) FROM event_authority_requests WHERE estado = "respondido"')->fetchColumn();
-    $stats['validation_pending'] = max(0, $stats['validation_requests'] - $stats['validation_responded']);
-
-    $stmt = db()->prepare('SELECT titulo, fecha_inicio, fecha_fin, ubicacion, tipo FROM events ORDER BY fecha_inicio DESC LIMIT 5');
-    $stmt->execute();
-    $upcomingEvents = $stmt->fetchAll();
+    $stats['collections_total'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios')->fetchColumn();
+    $stats['collections_paid'] = (int) db()->query('SELECT COUNT(*) FROM pagos_clientes')->fetchColumn();
+    $stats['collections_pending'] = max(0, $stats['collections_total'] - $stats['collections_paid']);
+    $stats['pending_amount'] = (float) db()->query('SELECT COALESCE(SUM(monto), 0) FROM cobros_servicios WHERE estado <> "Pagado"')->fetchColumn();
+    $stats['paid_amount'] = (float) db()->query('SELECT COALESCE(SUM(monto), 0) FROM pagos_clientes')->fetchColumn();
+    $stats['clients_total'] = (int) db()->query('SELECT COUNT(*) FROM clientes')->fetchColumn();
+    $stats['clients_active'] = (int) db()->query('SELECT COUNT(*) FROM clientes WHERE estado = 1')->fetchColumn();
 
     $stmt = db()->prepare(
-        'SELECT e.titulo, r.destinatario_nombre, r.destinatario_correo, r.responded_at
-         FROM event_authority_requests r
-         INNER JOIN events e ON e.id = r.event_id
-         WHERE r.estado = "respondido"
-         ORDER BY r.responded_at DESC
+        'SELECT cliente, referencia, monto, fecha_cobro, estado
+         FROM cobros_servicios
+         WHERE estado <> "Pagado"
+         ORDER BY fecha_cobro ASC
          LIMIT 5'
     );
     $stmt->execute();
-    $recentValidations = $stmt->fetchAll();
+    $upcomingCollections = $stmt->fetchAll();
 
     $stmt = db()->prepare(
-        'SELECT DATE_FORMAT(fecha_inicio, "%Y-%m") AS month_key, COUNT(*) AS total
-         FROM events
-         WHERE fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+        'SELECT c.cliente, p.monto, p.fecha_pago, p.metodo
+         FROM pagos_clientes p
+         LEFT JOIN cobros_servicios c ON c.id = p.cobro_id
+         ORDER BY p.fecha_pago DESC
+         LIMIT 5'
+    );
+    $stmt->execute();
+    $recentPayments = $stmt->fetchAll();
+
+    $stmt = db()->prepare(
+        'SELECT DATE_FORMAT(fecha_cobro, "%Y-%m") AS month_key, SUM(monto) AS total
+         FROM cobros_servicios
+         WHERE fecha_cobro >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
          GROUP BY month_key
          ORDER BY month_key'
     );
     $stmt->execute();
-    $eventsByMonth = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+    $collectionsByMonth = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 
     $stmt = db()->prepare(
-        'SELECT DATE_FORMAT(responded_at, "%Y-%m") AS month_key, COUNT(*) AS total
-         FROM event_authority_requests
-         WHERE estado = "respondido" AND responded_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+        'SELECT DATE_FORMAT(fecha_pago, "%Y-%m") AS month_key, SUM(monto) AS total
+         FROM pagos_clientes
+         WHERE fecha_pago >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
          GROUP BY month_key
          ORDER BY month_key'
     );
     $stmt->execute();
-    $validationsByMonth = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $stmt = db()->prepare(
-        'SELECT COALESCE(g.nombre, "Sin grupo") AS grupo, COUNT(*) AS total
-         FROM authorities a
-         LEFT JOIN authority_groups g ON g.id = a.group_id
-         GROUP BY grupo
-         ORDER BY total DESC'
-    );
-    $stmt->execute();
-    $authoritiesByGroup = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+    $paymentsByMonth = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
 } catch (Exception $e) {
 } catch (Error $e) {
 }
@@ -96,16 +90,20 @@ $monthsMap = [
     '12' => 'Dic',
 ];
 $monthLabels = [];
-$eventsSeries = [];
-$validationsSeries = [];
+$collectionsSeries = [];
+$paymentsSeries = [];
 for ($i = 5; $i >= 0; $i--) {
     $date = new DateTime("-{$i} months");
     $monthKey = $date->format('Y-m');
     $monthLabel = ($monthsMap[$date->format('m')] ?? $date->format('m')) . ' ' . $date->format('Y');
     $monthLabels[] = $monthLabel;
-    $eventsSeries[] = isset($eventsByMonth[$monthKey]) ? (int) $eventsByMonth[$monthKey] : 0;
-    $validationsSeries[] = isset($validationsByMonth[$monthKey]) ? (int) $validationsByMonth[$monthKey] : 0;
+    $collectionsSeries[] = isset($collectionsByMonth[$monthKey]) ? (float) $collectionsByMonth[$monthKey] : 0;
+    $paymentsSeries[] = isset($paymentsByMonth[$monthKey]) ? (float) $paymentsByMonth[$monthKey] : 0;
 }
+
+$moneyFormatter = static function (float $value): string {
+    return '$' . number_format($value, 2, ',', '.');
+};
 
 include('partials/html.php');
 ?>
@@ -130,19 +128,19 @@ include('partials/html.php');
 
             <div class="container-fluid dashboard-compact">
 
-                <?php $subtitle = "Resumen general"; $title = "Panel de control"; include('partials/page-title.php'); ?>
+                <?php $subtitle = "Resumen financiero"; $title = "Panel de cobros"; include('partials/page-title.php'); ?>
 
                 <div class="row g-2 mb-3">
                     <div class="col-12">
                         <div class="card border-0 shadow-sm dashboard-hero dashboard-card">
                             <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
                                 <div>
-                                    <h4 class="mb-1">Panel municipal</h4>
-                                    <p class="text-muted mb-0">Visión rápida del estado de eventos, autoridades y validaciones.</p>
+                                    <h4 class="mb-1">Estado general de cobros</h4>
+                                    <p class="text-muted mb-0">Seguimiento de montos pendientes, pagos recibidos y salud de la cartera.</p>
                                 </div>
                                 <div class="d-flex flex-wrap align-items-center gap-2">
-                                    <span class="badge bg-primary-subtle text-primary">Eventos próximos: <?php echo (int) $stats['events_upcoming']; ?></span>
-                                    <span class="badge bg-success-subtle text-success">Validaciones respondidas: <?php echo (int) $stats['validation_responded']; ?></span>
+                                    <span class="badge bg-warning-subtle text-warning">Pendiente: <?php echo $moneyFormatter($stats['pending_amount']); ?></span>
+                                    <span class="badge bg-success-subtle text-success">Pagado: <?php echo $moneyFormatter($stats['paid_amount']); ?></span>
                                 </div>
                             </div>
                         </div>
@@ -155,62 +153,73 @@ include('partials/html.php');
                             <div class="card-body">
                                 <div class="d-flex align-items-center justify-content-between">
                                     <div>
-                                        <p class="text-muted mb-1">Eventos registrados</p>
-                                        <h4 class="mb-0"><?php echo (int) $stats['events_total']; ?></h4>
-                                    </div>
-                                    <span class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
-                                        <i class="ti ti-calendar-event fs-4"></i>
-                                    </span>
-                                </div>
-                                <div class="mt-3 small text-muted">Próximos: <?php echo (int) $stats['events_upcoming']; ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
-                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <p class="text-muted mb-1">Autoridades</p>
-                                        <h4 class="mb-0"><?php echo (int) $stats['authorities_total']; ?></h4>
-                                    </div>
-                                    <span class="avatar-sm rounded-circle bg-success-subtle text-success d-flex align-items-center justify-content-center">
-                                        <i class="ti ti-users fs-4"></i>
-                                    </span>
-                                </div>
-                                <div class="mt-3 small text-muted">Catálogo activo de autoridades municipales.</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
-                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <p class="text-muted mb-1">Usuarios activos</p>
-                                        <h4 class="mb-0"><?php echo (int) $stats['users_total']; ?></h4>
-                                    </div>
-                                    <span class="avatar-sm rounded-circle bg-info-subtle text-info d-flex align-items-center justify-content-center">
-                                        <i class="ti ti-user-circle fs-4"></i>
-                                    </span>
-                                </div>
-                                <div class="mt-3 small text-muted">Accesos habilitados en el sistema.</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
-                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <p class="text-muted mb-1">Validaciones pendientes</p>
-                                        <h4 class="mb-0"><?php echo (int) $stats['validation_pending']; ?></h4>
+                                        <p class="text-muted mb-1">Monto pendiente</p>
+                                        <h4 class="mb-0"><?php echo $moneyFormatter($stats['pending_amount']); ?></h4>
                                     </div>
                                     <span class="avatar-sm rounded-circle bg-warning-subtle text-warning d-flex align-items-center justify-content-center">
-                                        <i class="ti ti-alert-triangle fs-4"></i>
+                                        <i class="ti ti-alert-circle fs-4"></i>
                                     </span>
                                 </div>
-                                <div class="mt-3 small text-muted">Solicitudes totales: <?php echo (int) $stats['validation_requests']; ?></div>
+                                <div class="mt-3 small text-muted">Cobros en curso: <?php echo (int) $stats['collections_pending']; ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
+                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <p class="text-muted mb-1">Monto pagado</p>
+                                        <h4 class="mb-0"><?php echo $moneyFormatter($stats['paid_amount']); ?></h4>
+                                    </div>
+                                    <span class="avatar-sm rounded-circle bg-success-subtle text-success d-flex align-items-center justify-content-center">
+                                        <i class="ti ti-credit-card fs-4"></i>
+                                    </span>
+                                </div>
+                                <div class="mt-3 small text-muted">Pagos registrados: <?php echo (int) $stats['collections_paid']; ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
+                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <p class="text-muted mb-1">KPI de cobros</p>
+                                        <?php
+                                        $collectionTotalAmount = $stats['pending_amount'] + $stats['paid_amount'];
+                                        $collectionRate = $collectionTotalAmount > 0
+                                            ? round(($stats['paid_amount'] / $collectionTotalAmount) * 100)
+                                            : 0;
+                                        ?>
+                                        <h4 class="mb-0"><?php echo $collectionRate; ?>%</h4>
+                                    </div>
+                                    <span class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                                        <i class="ti ti-chart-line fs-4"></i>
+                                    </span>
+                                </div>
+                                <div class="mt-3 small text-muted">Efectividad de pago sobre el monto total.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
+                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <p class="text-muted mb-1">KPI de clientes</p>
+                                        <?php
+                                        $clientRate = $stats['clients_total'] > 0
+                                            ? round(($stats['clients_active'] / $stats['clients_total']) * 100)
+                                            : 0;
+                                        ?>
+                                        <h4 class="mb-0"><?php echo $clientRate; ?>%</h4>
+                                    </div>
+                                    <span class="avatar-sm rounded-circle bg-info-subtle text-info d-flex align-items-center justify-content-center">
+                                        <i class="ti ti-users-group fs-4"></i>
+                                    </span>
+                                </div>
+                                <div class="mt-3 small text-muted">Clientes activos: <?php echo (int) $stats['clients_active']; ?> de <?php echo (int) $stats['clients_total']; ?></div>
                             </div>
                         </div>
                     </div>
@@ -220,16 +229,16 @@ include('partials/html.php');
                     <div class="col-xl-7">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Eventos por mes</h5>
+                                <h5 class="card-title mb-0">Cobros y pagos por mes</h5>
                                 <span class="text-muted small">Últimos 6 meses</span>
                             </div>
                             <div class="card-body">
                                 <div class="chart-fixed chart-sm">
-                                    <canvas id="eventsMonthlyChart" aria-label="Eventos por mes" role="img"></canvas>
+                                    <canvas id="collectionsMonthlyChart" aria-label="Cobros y pagos por mes" role="img"></canvas>
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 mt-2 small text-muted">
-                                    <span><span class="fw-semibold text-primary">Eventos:</span> <?php echo (int) $stats['events_total']; ?></span>
-                                    <span><span class="fw-semibold text-success">Validaciones respondidas:</span> <?php echo (int) $stats['validation_responded']; ?></span>
+                                    <span><span class="fw-semibold text-primary">Cobros generados:</span> <?php echo (int) $stats['collections_total']; ?></span>
+                                    <span><span class="fw-semibold text-success">Pagos registrados:</span> <?php echo (int) $stats['collections_paid']; ?></span>
                                 </div>
                             </div>
                         </div>
@@ -237,25 +246,20 @@ include('partials/html.php');
                     <div class="col-xl-5">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Estado de validaciones</h5>
-                                <span class="text-muted small">Solicitudes</span>
+                                <h5 class="card-title mb-0">Estado de cobros</h5>
+                                <span class="text-muted small">Totales</span>
                             </div>
                             <div class="card-body">
                                 <div class="chart-fixed chart-md">
-                                    <canvas id="validationStatusChart" aria-label="Estado de validaciones" role="img"></canvas>
+                                    <canvas id="collectionsStatusChart" aria-label="Estado de cobros" role="img"></canvas>
                                 </div>
-                                <?php
-                                $validationRate = $stats['validation_requests'] > 0
-                                    ? round(($stats['validation_responded'] / $stats['validation_requests']) * 100)
-                                    : 0;
-                                ?>
                                 <div class="mt-2">
                                     <div class="d-flex align-items-center justify-content-between small text-muted mb-1">
-                                        <span>Tasa de respuesta</span>
-                                        <span class="fw-semibold text-success"><?php echo $validationRate; ?>%</span>
+                                        <span>Tasa de cobro</span>
+                                        <span class="fw-semibold text-success"><?php echo $collectionRate; ?>%</span>
                                     </div>
                                     <div class="progress progress-sm">
-                                        <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $validationRate; ?>%;" aria-valuenow="<?php echo $validationRate; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                                        <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $collectionRate; ?>%;" aria-valuenow="<?php echo $collectionRate; ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                 </div>
                             </div>
@@ -264,48 +268,55 @@ include('partials/html.php');
                 </div>
 
                 <div class="row g-2">
-                    <div class="col-xl-3">
+                    <div class="col-xl-4">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Autoridades por grupo</h5>
-                                <span class="text-muted small">Distribución</span>
+                                <h5 class="card-title mb-0">Resumen de clientes</h5>
+                                <span class="text-muted small">Actividad</span>
                             </div>
                             <div class="card-body">
-                                <div class="chart-fixed chart-lg">
-                                    <canvas id="authoritiesGroupChart" aria-label="Autoridades por grupo" role="img"></canvas>
+                                <div class="d-flex flex-column gap-3">
+                                    <div>
+                                        <div class="d-flex align-items-center justify-content-between small text-muted mb-1">
+                                            <span>Clientes activos</span>
+                                            <span class="fw-semibold text-info"><?php echo (int) $stats['clients_active']; ?></span>
+                                        </div>
+                                        <div class="progress progress-sm">
+                                            <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo $clientRate; ?>%;" aria-valuenow="<?php echo $clientRate; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 rounded-3 bg-light">
+                                        <div class="text-muted small">Clientes inactivos</div>
+                                        <div class="h5 mb-0"><?php echo max(0, $stats['clients_total'] - $stats['clients_active']); ?></div>
+                                    </div>
+                                    <div class="text-muted small">Total clientes: <?php echo (int) $stats['clients_total']; ?></div>
                                 </div>
-                                <div class="small text-muted mt-2">Total autoridades: <?php echo (int) $stats['authorities_total']; ?></div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-9">
+                    <div class="col-xl-8">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Eventos recientes</h5>
-                                <a class="btn btn-sm btn-outline-primary" href="eventos-lista.php">Ver todos</a>
+                                <h5 class="card-title mb-0">Cobros pendientes próximos</h5>
+                                <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php">Ver cobros</a>
                             </div>
                             <div class="card-body">
-                                <?php if (empty($upcomingEvents)) : ?>
-                                    <div class="text-muted">No hay eventos registrados todavía.</div>
+                                <?php if (empty($upcomingCollections)) : ?>
+                                    <div class="text-muted">No hay cobros pendientes por ahora.</div>
                                 <?php else : ?>
                                     <div class="list-group list-group-flush">
-                                        <?php foreach ($upcomingEvents as $event) : ?>
+                                        <?php foreach ($upcomingCollections as $collection) : ?>
                                             <div class="list-group-item px-0">
                                                 <div class="d-flex align-items-start justify-content-between gap-3">
                                                     <div>
-                                                        <h6 class="mb-1"><?php echo htmlspecialchars($event['titulo'], ENT_QUOTES, 'UTF-8'); ?></h6>
-                                                        <div class="text-muted small">
-                                                            <?php echo htmlspecialchars($event['ubicacion'], ENT_QUOTES, 'UTF-8'); ?>
-                                                            · <?php echo htmlspecialchars($event['tipo'], ENT_QUOTES, 'UTF-8'); ?>
-                                                        </div>
+                                                        <h6 class="mb-1"><?php echo htmlspecialchars($collection['cliente'], ENT_QUOTES, 'UTF-8'); ?></h6>
+                                                        <div class="text-muted small">Referencia: <?php echo htmlspecialchars($collection['referencia'] ?: 'Sin referencia', ENT_QUOTES, 'UTF-8'); ?></div>
                                                     </div>
                                                     <div class="text-end">
                                                         <div class="badge text-bg-light">
-                                                            <?php echo htmlspecialchars($event['fecha_inicio'], ENT_QUOTES, 'UTF-8'); ?>
+                                                            <?php echo htmlspecialchars($collection['fecha_cobro'], ENT_QUOTES, 'UTF-8'); ?>
                                                         </div>
-                                                        <div class="text-muted small mt-1">
-                                                            <?php echo htmlspecialchars($event['fecha_fin'], ENT_QUOTES, 'UTF-8'); ?>
-                                                        </div>
+                                                        <div class="text-muted small mt-1"><?php echo $moneyFormatter((float) $collection['monto']); ?></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -321,27 +332,26 @@ include('partials/html.php');
                     <div class="col-12">
                         <div class="card border-0 shadow-sm dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Validaciones recientes</h5>
-                                <a class="btn btn-sm btn-outline-primary" href="eventos-procesados.php">Ver procesados</a>
+                                <h5 class="card-title mb-0">Pagos recientes</h5>
+                                <a class="btn btn-sm btn-outline-primary" href="cobros-pagos.php">Ver pagos</a>
                             </div>
                             <div class="card-body">
-                                <?php if (empty($recentValidations)) : ?>
-                                    <div class="text-muted">Aún no hay validaciones respondidas.</div>
+                                <?php if (empty($recentPayments)) : ?>
+                                    <div class="text-muted">Aún no hay pagos registrados.</div>
                                 <?php else : ?>
                                     <div class="list-group list-group-flush">
-                                        <?php foreach ($recentValidations as $validation) : ?>
+                                        <?php foreach ($recentPayments as $payment) : ?>
                                             <div class="list-group-item px-0">
                                                 <div class="d-flex align-items-start justify-content-between gap-2">
                                                     <div>
-                                                        <div class="fw-semibold"><?php echo htmlspecialchars($validation['titulo'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                        <div class="fw-semibold"><?php echo htmlspecialchars($payment['cliente'] ?: 'Cliente sin nombre', ENT_QUOTES, 'UTF-8'); ?></div>
                                                         <div class="text-muted small">
-                                                            <?php echo htmlspecialchars($validation['destinatario_nombre'] ?: 'Sin nombre', ENT_QUOTES, 'UTF-8'); ?>
-                                                            · <?php echo htmlspecialchars($validation['destinatario_correo'], ENT_QUOTES, 'UTF-8'); ?>
+                                                            Método: <?php echo htmlspecialchars($payment['metodo'] ?: 'Sin método', ENT_QUOTES, 'UTF-8'); ?>
                                                         </div>
                                                     </div>
-                                                    <span class="badge text-bg-success">Respondido</span>
+                                                    <span class="badge text-bg-success"><?php echo $moneyFormatter((float) $payment['monto']); ?></span>
                                                 </div>
-                                                <div class="text-muted small mt-1">Fecha: <?php echo htmlspecialchars($validation['responded_at'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                <div class="text-muted small mt-1">Fecha: <?php echo htmlspecialchars($payment['fecha_pago'], ENT_QUOTES, 'UTF-8'); ?></div>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
@@ -444,13 +454,11 @@ include('partials/html.php');
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const monthlyLabels = <?php echo json_encode($monthLabels, JSON_UNESCAPED_UNICODE); ?>;
-            const monthlyValues = <?php echo json_encode($eventsSeries, JSON_UNESCAPED_UNICODE); ?>;
-            const validationsSeries = <?php echo json_encode($validationsSeries, JSON_UNESCAPED_UNICODE); ?>;
-            const validationData = <?php echo json_encode([(int) $stats['validation_responded'], (int) $stats['validation_pending']], JSON_UNESCAPED_UNICODE); ?>;
-            const groupLabels = <?php echo json_encode(array_keys($authoritiesByGroup), JSON_UNESCAPED_UNICODE); ?>;
-            const groupValues = <?php echo json_encode(array_values($authoritiesByGroup), JSON_UNESCAPED_UNICODE); ?>;
+            const collectionsSeries = <?php echo json_encode($collectionsSeries, JSON_UNESCAPED_UNICODE); ?>;
+            const paymentsSeries = <?php echo json_encode($paymentsSeries, JSON_UNESCAPED_UNICODE); ?>;
+            const collectionsData = <?php echo json_encode([(int) $stats['collections_paid'], (int) $stats['collections_pending']], JSON_UNESCAPED_UNICODE); ?>;
 
-            const monthlyChartEl = document.getElementById('eventsMonthlyChart');
+            const monthlyChartEl = document.getElementById('collectionsMonthlyChart');
             if (monthlyChartEl) {
                 new Chart(monthlyChartEl, {
                     type: 'line',
@@ -458,8 +466,8 @@ include('partials/html.php');
                         labels: monthlyLabels,
                         datasets: [
                             {
-                                label: 'Eventos',
-                                data: monthlyValues,
+                                label: 'Cobros',
+                                data: collectionsSeries,
                                 borderColor: '#0d6efd',
                                 backgroundColor: 'rgba(13, 110, 253, 0.12)',
                                 tension: 0.35,
@@ -468,8 +476,8 @@ include('partials/html.php');
                                 pointBackgroundColor: '#0d6efd',
                             },
                             {
-                                label: 'Validaciones respondidas',
-                                data: validationsSeries,
+                                label: 'Pagos',
+                                data: paymentsSeries,
                                 borderColor: '#16a34a',
                                 backgroundColor: 'rgba(22, 163, 74, 0.08)',
                                 tension: 0.35,
@@ -504,15 +512,15 @@ include('partials/html.php');
                 });
             }
 
-            const validationChartEl = document.getElementById('validationStatusChart');
-            if (validationChartEl) {
-                new Chart(validationChartEl, {
+            const statusChartEl = document.getElementById('collectionsStatusChart');
+            if (statusChartEl) {
+                new Chart(statusChartEl, {
                     type: 'doughnut',
                     data: {
-                        labels: ['Respondidas', 'Pendientes'],
+                        labels: ['Pagados', 'Pendientes'],
                         datasets: [
                             {
-                                data: validationData,
+                                data: collectionsData,
                                 backgroundColor: ['#16a34a', '#f59e0b'],
                                 borderWidth: 0,
                             },
@@ -531,47 +539,6 @@ include('partials/html.php');
                 });
             }
 
-            const groupChartEl = document.getElementById('authoritiesGroupChart');
-            if (groupChartEl) {
-                new Chart(groupChartEl, {
-                    type: 'bar',
-                    data: {
-                        labels: groupLabels,
-                        datasets: [
-                            {
-                                label: 'Autoridades',
-                                data: groupValues,
-                                backgroundColor: 'rgba(37, 99, 235, 0.2)',
-                                borderColor: '#2563eb',
-                                borderWidth: 1,
-                                borderRadius: 8,
-                            },
-                        ],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: false,
-                            },
-                        },
-                        scales: {
-                            x: {
-                                grid: {
-                                    display: false,
-                                },
-                            },
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    precision: 0,
-                                },
-                            },
-                        },
-                    },
-                });
-            }
         });
     </script>
 

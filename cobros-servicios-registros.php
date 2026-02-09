@@ -260,6 +260,7 @@ $clientes = [];
 $servicios = [];
 $serviciosPorCliente = [];
 $cobros = [];
+$totalesCobros = [];
 try {
     $clientes = db()->query('SELECT id, codigo, nombre, color_hex FROM clientes WHERE estado = 1 ORDER BY nombre')->fetchAll();
     $servicios = db()->query('SELECT id, nombre, monto FROM servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
@@ -307,6 +308,21 @@ try {
          JOIN servicios s ON s.id = cs.servicio_id
          ORDER BY cs.id DESC'
     )->fetchAll();
+    $totalesCobros = db()->query(
+        'SELECT COALESCE(c.nombre, cs.cliente) AS cliente,
+                c.codigo AS cliente_codigo,
+                c.color_hex AS cliente_color,
+                s.nombre AS servicio,
+                COUNT(cs.id) AS cobros_total,
+                SUM(cs.monto) AS monto_cobros,
+                COALESCE(SUM(p.monto), 0) AS monto_pagos
+         FROM cobros_servicios cs
+         LEFT JOIN clientes c ON c.id = cs.cliente_id
+         JOIN servicios s ON s.id = cs.servicio_id
+         LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id
+         GROUP BY cliente, cliente_codigo, cliente_color, servicio
+         ORDER BY cliente ASC, servicio ASC'
+    )->fetchAll();
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los registros de cobros.';
 } catch (Error $e) {
@@ -316,6 +332,10 @@ try {
 if ($cobroEdit && isset($cobroEdit['cliente_id'])) {
     $serviciosIniciales = $serviciosPorCliente[(int) $cobroEdit['cliente_id']] ?? [];
 }
+
+$moneyFormatter = static function (float $value): string {
+    return '$' . number_format($value, 2, ',', '.');
+};
 ?>
 <?php include('partials/html.php'); ?>
 
@@ -446,6 +466,67 @@ if ($cobroEdit && isset($cobroEdit['cliente_id'])) {
                         <div class="card">
                             <div class="card-header d-flex align-items-center justify-content-between gap-2">
                                 <div>
+                                    <h5 class="card-title mb-0">Totales por cliente y servicio</h5>
+                                    <p class="text-muted mb-0">Resumen consolidado de cobros y pagos por cliente.</p>
+                                </div>
+                                <span class="badge text-bg-primary"><?php echo count($totalesCobros); ?> filas</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-centered mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Cliente</th>
+                                                <th>Servicio</th>
+                                                <th>Cobros</th>
+                                                <th>Monto cobrado</th>
+                                                <th>Monto pagado</th>
+                                                <th>Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if (empty($totalesCobros)) : ?>
+                                                <tr>
+                                                    <td colspan="6" class="text-center text-muted">No hay totales disponibles.</td>
+                                                </tr>
+                                            <?php else : ?>
+                                                <?php foreach ($totalesCobros as $total) : ?>
+                                                    <?php
+                                                    $montoCobrado = (float) ($total['monto_cobros'] ?? 0);
+                                                    $montoPagado = (float) ($total['monto_pagos'] ?? 0);
+                                                    $saldo = $montoCobrado - $montoPagado;
+                                                    ?>
+                                                    <tr>
+                                                        <td>
+                                                            <span class="badge" style="background-color: <?php echo htmlspecialchars($total['cliente_color'] ?? '#6c757d', ENT_QUOTES, 'UTF-8'); ?>;">
+                                                                <?php echo htmlspecialchars($total['cliente_codigo'] ?? 'SIN-COD', ENT_QUOTES, 'UTF-8'); ?>
+                                                            </span>
+                                                            <?php echo htmlspecialchars($total['cliente'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </td>
+                                                        <td><?php echo htmlspecialchars($total['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo (int) ($total['cobros_total'] ?? 0); ?></td>
+                                                        <td><?php echo $moneyFormatter($montoCobrado); ?></td>
+                                                        <td><?php echo $moneyFormatter($montoPagado); ?></td>
+                                                        <td>
+                                                            <span class="fw-semibold <?php echo $saldo > 0 ? 'text-danger' : 'text-success'; ?>">
+                                                                <?php echo $moneyFormatter($saldo); ?>
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                                <div>
                                     <h5 class="card-title mb-0">Cobros registrados</h5>
                                     <p class="text-muted mb-0">Últimos cobros asociados a servicios.</p>
                                 </div>
@@ -477,7 +558,7 @@ if ($cobroEdit && isset($cobroEdit['cliente_id'])) {
                                                         <td><?php echo htmlspecialchars($cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($cobro['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($cobro['referencia'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td>$<?php echo number_format((float) $cobro['monto'], 2, ',', '.'); ?></td>
+                                                        <td><?php echo $moneyFormatter((float) $cobro['monto']); ?></td>
                                                         <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($cobro['fecha_cobro'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td>
                                                             <div class="text-muted small">
