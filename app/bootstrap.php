@@ -31,6 +31,7 @@ if (!isset($_SESSION['user'])) {
         'medios-acreditacion-imprimir.php',
         'eventos-acreditacion-medios.php',
         'm.php',
+        'flow-webhook-confirmation.php',
     ];
 
     if (!in_array($currentScript, $publicScripts, true) && strncmp($currentScript, 'auth-', 5) !== 0) {
