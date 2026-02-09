@@ -21,6 +21,7 @@ try {
             tipo_servicio_id INT NULL,
             nombre VARCHAR(150) NOT NULL,
             descripcion TEXT NULL,
+            link_boton_pago VARCHAR(255) NULL,
             monto DECIMAL(10,2) NOT NULL DEFAULT 0,
             estado TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -49,6 +50,7 @@ function ensure_column(string $table, string $column, string $definition): void
 
 try {
     ensure_column('servicios', 'tipo_servicio_id', 'INT NULL');
+    ensure_column('servicios', 'link_boton_pago', 'VARCHAR(255) NULL');
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de servicios.';
 } catch (Error $e) {
@@ -75,7 +77,7 @@ if (isset($_GET['id'])) {
     $editId = (int) $_GET['id'];
     if ($editId > 0) {
         try {
-            $stmt = db()->prepare('SELECT id, tipo_servicio_id, nombre, descripcion, monto, estado FROM servicios WHERE id = ?');
+            $stmt = db()->prepare('SELECT id, tipo_servicio_id, nombre, descripcion, link_boton_pago, monto, estado FROM servicios WHERE id = ?');
             $stmt->execute([$editId]);
             $servicioEdit = $stmt->fetch() ?: null;
         } catch (Exception $e) {
@@ -88,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     $tipoServicioId = (int) ($_POST['tipo_servicio_id'] ?? 0);
     $nombre = trim($_POST['nombre'] ?? '');
     $descripcion = trim($_POST['descripcion'] ?? '');
+    $linkBotonPago = trim($_POST['link_boton_pago'] ?? '');
     $monto = trim($_POST['monto'] ?? '');
     $estado = isset($_POST['estado']) && $_POST['estado'] === '0' ? 0 : 1;
 
@@ -102,21 +105,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     if (empty($errors)) {
         try {
             if ($servicioEdit && isset($servicioEdit['id'])) {
-                $stmt = db()->prepare('UPDATE servicios SET tipo_servicio_id = ?, nombre = ?, descripcion = ?, monto = ?, estado = ? WHERE id = ?');
+                $stmt = db()->prepare('UPDATE servicios SET tipo_servicio_id = ?, nombre = ?, descripcion = ?, link_boton_pago = ?, monto = ?, estado = ? WHERE id = ?');
                 $stmt->execute([
                     $tipoServicioId > 0 ? $tipoServicioId : null,
                     $nombre,
                     $descripcion !== '' ? $descripcion : null,
+                    $linkBotonPago !== '' ? $linkBotonPago : null,
                     $monto,
                     $estado,
                     (int) $servicioEdit['id'],
                 ]);
             } else {
-                $stmt = db()->prepare('INSERT INTO servicios (tipo_servicio_id, nombre, descripcion, monto, estado) VALUES (?, ?, ?, ?, ?)');
+                $stmt = db()->prepare('INSERT INTO servicios (tipo_servicio_id, nombre, descripcion, link_boton_pago, monto, estado) VALUES (?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $tipoServicioId > 0 ? $tipoServicioId : null,
                     $nombre,
                     $descripcion !== '' ? $descripcion : null,
+                    $linkBotonPago !== '' ? $linkBotonPago : null,
                     $monto,
                     $estado,
                 ]);
@@ -135,7 +140,7 @@ $servicios = [];
 try {
     $tiposServicios = db()->query('SELECT id, nombre FROM tipos_servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
     $servicios = db()->query(
-        'SELECT s.id, s.nombre, s.descripcion, s.monto, s.estado, s.created_at, t.nombre AS tipo
+        'SELECT s.id, s.nombre, s.descripcion, s.link_boton_pago, s.monto, s.estado, s.created_at, t.nombre AS tipo
          FROM servicios s
          LEFT JOIN tipos_servicios t ON t.id = s.tipo_servicio_id
          ORDER BY s.id DESC'
@@ -218,6 +223,11 @@ try {
                                             <label class="form-label" for="servicio-descripcion">Descripción</label>
                                             <textarea id="servicio-descripcion" name="descripcion" class="form-control" rows="3"><?php echo htmlspecialchars($servicioEdit['descripcion'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
                                         </div>
+                                        <div class="col-12">
+                                            <label class="form-label" for="servicio-link-pago">Link botón de pago</label>
+                                            <input type="url" id="servicio-link-pago" name="link_boton_pago" class="form-control" placeholder="https://..." value="<?php echo htmlspecialchars($servicioEdit['link_boton_pago'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <small class="text-muted d-block mt-2">Se mostrará como botón en los correos de aviso.</small>
+                                        </div>
                                         <div class="col-md-6">
                                             <label class="form-label" for="servicio-monto">Monto</label>
                                             <div class="input-group">
@@ -259,6 +269,7 @@ try {
                                                 <th>Servicio</th>
                                                 <th>Tipo</th>
                                                 <th>Descripción</th>
+                                                <th>Link pago</th>
                                                 <th>Monto</th>
                                                 <th>Estado</th>
                                                 <th>Creación</th>
@@ -268,7 +279,7 @@ try {
                                         <tbody>
                                             <?php if (empty($servicios)) : ?>
                                                 <tr>
-                                                    <td colspan="7" class="text-center text-muted">Aún no hay servicios registrados.</td>
+                                                    <td colspan="8" class="text-center text-muted">Aún no hay servicios registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($servicios as $servicio) : ?>
@@ -276,6 +287,13 @@ try {
                                                         <td><?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($servicio['tipo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($servicio['descripcion'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td>
+                                                            <?php if (!empty($servicio['link_boton_pago'])) : ?>
+                                                                <a href="<?php echo htmlspecialchars($servicio['link_boton_pago'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Ver link</a>
+                                                            <?php else : ?>
+                                                                -
+                                                            <?php endif; ?>
+                                                        </td>
                                                         <td>$<?php echo number_format((float) $servicio['monto'], 2, ',', '.'); ?></td>
                                                         <td>
                                                             <?php if ((int) $servicio['estado'] === 1) : ?>
