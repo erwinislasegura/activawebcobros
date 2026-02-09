@@ -77,6 +77,15 @@ function build_aviso_template(string $primary, string $accent, string $titulo, s
               <p style="margin:0 0 12px 0;color:#4B5563;">
                 Para evitar interrupciones y asegurar la correcta continuidad de sus servicios digitales, le recomendamos realizar el pago dentro del plazo indicado.
               </p>
+              <table cellpadding="0" cellspacing="0" style="margin:18px 0;">
+                <tr>
+                  <td>
+                    <a href="{{link_boton_pago}}" style="background:{$primary};color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;">
+                      Pagar ahora
+                    </a>
+                  </td>
+                </tr>
+              </table>
               <p style="margin:0 0 12px 0;color:#4B5563;">
                 Ante cualquier consulta, aclaración o si requiere apoyo con el proceso de renovación, puede responder directamente a este correo y con gusto lo asistiremos.
               </p>
