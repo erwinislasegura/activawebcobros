@@ -77,11 +77,17 @@ function append_payment_button(string $bodyHtml, string $link): string
     $buttonHtml = <<<HTML
 <table cellpadding="0" cellspacing="0" style="margin:18px 0;">
   <tr>
+    <td style="padding-bottom:6px;font-size:14px;font-weight:700;color:#111827;">Paga aquí!</td>
+  </tr>
+  <tr>
     <td>
-      <a href="{$safeLink}" style="background:#1D4ED8;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;">
+      <a href="{$safeLink}" style="background:#1D4ED8;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;min-width:240px;text-align:center;">
         Pagar ahora
       </a>
     </td>
+  </tr>
+  <tr>
+    <td style="padding-top:6px;font-size:12px;color:#6B7280;">Pago seguro</td>
   </tr>
 </table>
 HTML;
