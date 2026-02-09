@@ -357,14 +357,17 @@ try {
                                                 </td>
                                                 <td><?php echo htmlspecialchars($servicio, ENT_QUOTES, 'UTF-8'); ?></td>
                                                 <td><?php echo htmlspecialchars($referencia, ENT_QUOTES, 'UTF-8'); ?></td>
-                                                <td>
+                                                <td class="text-muted small">Avisos en el detalle inferior</td>
+                                            </tr>
+                                            <tr class="table-light">
+                                                <td colspan="4">
                                                     <div class="row g-2">
                                                         <?php foreach ($avisos as $aviso) : ?>
                                                             <?php
                                                             $disabled = ($correo === '' || $correo === null || $aviso['fecha'] === null || $aviso['fecha'] === '' || $fromEmail === '');
                                                             ?>
                                                             <div class="col-12 col-md-4">
-                                                                <div class="border rounded-3 p-2 h-100">
+                                                                <div class="border rounded-3 p-2 h-100 bg-white">
                                                                     <div class="d-flex align-items-center justify-content-between">
                                                                         <span class="badge text-bg-light"><?php echo htmlspecialchars($aviso['short'], ENT_QUOTES, 'UTF-8'); ?></span>
                                                                         <?php if (!empty($aviso['sent'])) : ?>
