@@ -98,7 +98,7 @@
     <div class="email-wrapper">
         <div class="email-content">
             <div class="email-header">
-                <a href="#"><img src="assets/images/logo.png" alt="Go Muni" /></a>
+                <a href="#"><img src="assets/images/logo.png" alt="Go Cobros" /></a>
                 <span>Warning: You're approaching your limit. Please upgrade.</span>
             </div>
             <div class="email-body">
@@ -107,7 +107,7 @@
                 <p style="text-align: center;">
                     <a href="#" class="btn">Upgrade My Account</a>
                 </p>
-                <p>Thanks for choosing <b>Go Muni</b> Admin.</p>
+                <p>Thanks for choosing <b>Go Cobros</b> Admin.</p>
             </div>
             <div class="email-footer">
                 <a href="#">Unsubscribe</a> from these alerts.

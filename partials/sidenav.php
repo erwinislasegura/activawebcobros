@@ -80,6 +80,9 @@
                             <a href="cobros-servicios-registros.php" class="side-nav-link">Registros de cobros</a>
                         </li>
                         <li class="side-nav-item">
+                            <a href="cobros-totales.php" class="side-nav-link">Totales por cliente</a>
+                        </li>
+                        <li class="side-nav-item">
                             <a href="cobros-pagos.php" class="side-nav-link">Registrar pagos</a>
                         </li>
                         <li class="side-nav-item">
