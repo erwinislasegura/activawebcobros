@@ -26,6 +26,7 @@ try {
             tipo_servicio_id INT NULL,
             nombre VARCHAR(150) NOT NULL,
             descripcion TEXT NULL,
+            link_boton_pago VARCHAR(255) NULL,
             monto DECIMAL(10,2) NOT NULL DEFAULT 0,
             estado TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -81,6 +82,7 @@ function ensure_column(string $table, string $column, string $definition): void
 
 try {
     ensure_column('servicios', 'tipo_servicio_id', 'INT NULL');
+    ensure_column('servicios', 'link_boton_pago', 'VARCHAR(255) NULL');
     ensure_column('cobros_servicios', 'cliente_id', 'INT NULL');
     ensure_column('cobros_servicios', 'fecha_primer_aviso', 'DATE NULL');
     ensure_column('cobros_servicios', 'fecha_segundo_aviso', 'DATE NULL');
