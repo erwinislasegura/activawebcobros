@@ -76,7 +76,7 @@ $fromName = $correoConfig['from_nombre'] ?? ($municipalidad['nombre'] ?? '');
 
 try {
     $templates = [];
-    foreach (array_keys($templateKeys) as $key) {
+    foreach ($templateKeys as $key) {
         $stmt = db()->prepare('SELECT subject, body_html FROM email_templates WHERE template_key = ? LIMIT 1');
         $stmt->execute([$key]);
         $templates[$key] = $stmt->fetch() ?: [];
@@ -95,7 +95,7 @@ try {
             $returnUrl = 'cobros-avisos.php';
         }
 
-        if ($cobroId <= 0 || !array_key_exists($tipo, $templateKeys)) {
+        if ($cobroId <= 0 || !in_array($tipo, $templateKeys, true)) {
             $errorMessage = 'No se pudo identificar el aviso a enviar.';
         } elseif ($fromEmail === '') {
             $errorMessage = 'Configura el correo IMAP de envío antes de enviar avisos.';
