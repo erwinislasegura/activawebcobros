@@ -79,17 +79,21 @@ function build_aviso_template(string $primary, string $accent, string $titulo, s
               </p>
               <table cellpadding="0" cellspacing="0" style="margin:18px 0;">
                 <tr>
-                  <td style="padding-bottom:6px;font-size:14px;font-weight:700;color:#111827;">Paga aquí!</td>
-                </tr>
-                <tr>
                   <td>
-                    <a href="{{link_boton_pago}}" style="background:{$primary};color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;min-width:240px;text-align:center;">
-                      Pagar ahora
-                    </a>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+                      <tr>
+                        <td style="padding:14px;">
+                          <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:6px;">Paga aquí!</div>
+                          <a href="{{link_boton_pago}}" style="background:{$primary};color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;min-width:240px;text-align:center;">
+                            Pagar ahora
+                          </a>
+                          <div style="padding-top:8px;font-size:12px;color:#6B7280;line-height:1.5;">
+                            Pago seguro y protegido: este enlace pertenece al sistema oficial de cobros y protege sus datos con cifrado. Si tiene dudas, puede responder este correo para validar el pago antes de realizarlo.
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
-                </tr>
-                <tr>
-                  <td style="padding-top:6px;font-size:12px;color:#6B7280;">Pago seguro</td>
                 </tr>
               </table>
               <p style="margin:0 0 12px 0;color:#4B5563;">
