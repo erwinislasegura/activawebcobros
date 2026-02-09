@@ -109,7 +109,8 @@ try {
                         cs.fecha_primer_aviso,
                         cs.fecha_segundo_aviso,
                         cs.fecha_tercer_aviso,
-                        s.nombre AS servicio
+                        s.nombre AS servicio,
+                        s.link_boton_pago
                  FROM cobros_servicios cs
                  LEFT JOIN clientes c ON c.id = cs.cliente_id
                  JOIN servicios s ON s.id = cs.servicio_id
@@ -149,6 +150,7 @@ try {
                         '{{monto}}' => '$' . number_format((float) $cobro['monto'], 2, ',', '.'),
                         '{{fecha_aviso}}' => date('d/m/Y', strtotime((string) $fechaAviso)),
                         '{{referencia}}' => (string) ($cobro['referencia'] ?? ''),
+                        '{{link_boton_pago}}' => (string) ($cobro['link_boton_pago'] ?? ''),
                     ];
                     $subject = render_template($template['subject'], $data);
                     $bodyHtml = render_template($template['body_html'], $data);

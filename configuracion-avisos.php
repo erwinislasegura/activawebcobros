@@ -74,6 +74,7 @@ $previewData = [
     '{{monto}}' => '$120.000',
     '{{fecha_aviso}}' => date('d/m/Y'),
     '{{referencia}}' => 'ABC1234',
+    '{{link_boton_pago}}' => 'https://pagos.ejemplo.cl/boton/ABC1234',
 ];
 $subjectPreview = strtr($template['subject'], $previewData);
 $bodyPreview = strtr($template['body_html'], $previewData);
