@@ -86,8 +86,10 @@ function build_aviso_template(string $primary, string $accent, string $titulo, s
           </tr>
           <tr>
             <td style="padding:26px 24px 10px 24px;color:#111827;font-size:14px;line-height:1.65;">
-              <p style="margin:0 0 12px 0;">Hola <strong>{{cliente_nombre}}</strong>,</p>
-              <p style="margin:0 0 16px 0;color:#374151;">{$mensaje}</p>
+              <p style="margin:0 0 12px 0;">Estimado/a <strong>{{cliente_nombre}}</strong>,</p>
+              <p style="margin:0 0 16px 0;color:#374151;">
+                Junto con saludar, le informamos que su <strong>servicio digital contratado</strong> se encuentra próximo a su fecha de vencimiento.
+              </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 18px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
                 <tr>
                   <td style="padding:14px;">
@@ -113,7 +115,16 @@ function build_aviso_template(string $primary, string $accent, string $titulo, s
                 </tr>
               </table>
               <p style="margin:0 0 12px 0;color:#4B5563;">
-                Si tienes alguna consulta, puedes contactarnos respondiendo este correo.
+                Es importante considerar que la <strong>no renovación oportuna</strong> de este servicio puede afectar directamente la <strong>disponibilidad de su sitio web, correos corporativos y presencia en internet</strong>, lo que a su vez impacta la <strong>imagen, posicionamiento y continuidad operativa de su empresa frente a clientes y proveedores</strong>.
+              </p>
+              <p style="margin:0 0 12px 0;color:#4B5563;">
+                Para evitar interrupciones y asegurar la correcta continuidad de sus servicios digitales, le recomendamos realizar el pago dentro del plazo indicado.
+              </p>
+              <p style="margin:0 0 12px 0;color:#4B5563;">
+                Ante cualquier consulta, aclaración o si requiere apoyo con el proceso de renovación, puede responder directamente a este correo y con gusto lo asistiremos.
+              </p>
+              <p style="margin:0;color:#4B5563;">
+                Agradecemos su atención y preferencia.
               </p>
             </td>
           </tr>
@@ -122,7 +133,7 @@ function build_aviso_template(string $primary, string $accent, string $titulo, s
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="font-size:12px;color:#6B7280;line-height:1.5;">
-                    Mensaje automático de {{municipalidad_nombre}}.
+                    Atentamente,<br><strong>Departamento de Soporte y Servicios Digitales</strong><br>{{municipalidad_nombre}}
                   </td>
                   <td align="right" style="font-size:12px;color:#6B7280;white-space:nowrap;">
                     <span style="display:inline-block;width:10px;height:10px;border-radius:999px;background:{$primary};vertical-align:middle;margin-right:6px;"></span>
@@ -150,11 +161,11 @@ $templateKeys = [
 $defaultTemplates = [
     'aviso_1' => [
         'subject' => 'Aviso 1: {{servicio_nombre}} - {{cliente_nombre}}',
-        'body_html' => build_aviso_template('#1D4ED8', '#93C5FD', 'Aviso 1', 'Te recordamos el vencimiento del servicio.'),
+        'body_html' => build_aviso_template('#1D4ED8', '#93C5FD', 'Aviso 1', 'Aviso de vencimiento del servicio.'),
     ],
     'aviso_2' => [
         'subject' => 'Aviso 2: {{servicio_nombre}} - {{cliente_nombre}}',
-        'body_html' => build_aviso_template('#F59E0B', '#FCD34D', 'Aviso 2', 'Este es el segundo aviso de tu servicio.'),
+        'body_html' => build_aviso_template('#F59E0B', '#FCD34D', 'Aviso 2', 'Segundo aviso del servicio.'),
     ],
     'aviso_3' => [
         'subject' => 'Aviso 3: {{servicio_nombre}} - {{cliente_nombre}}',
