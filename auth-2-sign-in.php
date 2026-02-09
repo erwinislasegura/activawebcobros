@@ -13,6 +13,7 @@ $errors = [];
 $rut = '';
 $municipalidad = get_municipalidad();
 $logoAuthHeight = (int) ($municipalidad['logo_auth_height'] ?? 48);
+$logoInicioPath = $municipalidad['logo_inicio_path'] ?? $municipalidad['logo_path'] ?? 'assets/images/logo.png';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rut = trim((string) ($_POST['rut'] ?? ''));
@@ -106,10 +107,10 @@ include('partials/html.php');
                     <div class="card-body min-vh-100 d-flex flex-column justify-content-center">
                         <div class="auth-brand mb-0 text-center">
                             <a href="index.php" class="logo-dark">
-                                <img src="<?php echo htmlspecialchars($municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
+                                <img src="<?php echo htmlspecialchars($logoInicioPath, ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
                             </a>
                             <a href="index.php" class="logo-light">
-                                <img src="<?php echo htmlspecialchars($municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
+                                <img src="<?php echo htmlspecialchars($logoInicioPath, ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
                             </a>
                         </div>
 

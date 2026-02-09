@@ -115,6 +115,7 @@ CREATE TABLE `municipalidad` (
   `telefono` VARCHAR(30) DEFAULT NULL,
   `correo` VARCHAR(150) DEFAULT NULL,
   `logo_path` VARCHAR(255) DEFAULT NULL,
+  `logo_inicio_path` VARCHAR(255) DEFAULT NULL,
   `logo_topbar_height` INT UNSIGNED DEFAULT NULL,
   `logo_sidenav_height` INT UNSIGNED DEFAULT NULL,
   `logo_sidenav_height_sm` INT UNSIGNED DEFAULT NULL,
@@ -352,6 +353,17 @@ CREATE TABLE `servicios` (
   KEY `servicios_tipo_idx` (`tipo_servicio_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE `clientes_servicios` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `cliente_id` INT NOT NULL,
+  `servicio_id` INT NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_cliente_servicio` (`cliente_id`, `servicio_id`),
+  KEY `idx_clientes_servicios_cliente` (`cliente_id`),
+  KEY `idx_clientes_servicios_servicio` (`servicio_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE `cobros_servicios` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `servicio_id` INT NOT NULL,
@@ -387,8 +399,8 @@ CREATE TABLE `pagos_clientes` (
   UNIQUE KEY `uniq_pagos_cobro` (`cobro_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `municipalidad` (`nombre`, `rut`, `direccion`, `telefono`, `correo`, `logo_path`, `color_primary`, `color_secondary`)
-VALUES ('Go Muni', NULL, NULL, NULL, NULL, 'assets/images/logo.png', '#6658dd', '#4a81d4');
+INSERT INTO `municipalidad` (`nombre`, `rut`, `direccion`, `telefono`, `correo`, `logo_path`, `logo_inicio_path`, `color_primary`, `color_secondary`)
+VALUES ('Go Muni', NULL, NULL, NULL, NULL, 'assets/images/logo.png', 'assets/images/logo.png', '#6658dd', '#4a81d4');
 
 INSERT INTO `notificacion_correos` (`correo_imap`, `password_imap`, `host_imap`, `puerto_imap`, `seguridad_imap`, `from_nombre`, `from_correo`)
 VALUES ('notificaciones@municipalidad.cl', 'cambiar_password', 'imap.municipalidad.cl', 993, 'ssl', 'Sistema Municipal', 'notificaciones@municipalidad.cl');

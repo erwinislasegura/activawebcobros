@@ -48,6 +48,17 @@ try {
             INDEX idx_cobros_servicios_servicio (servicio_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS clientes_servicios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_id INT NOT NULL,
+            servicio_id INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_cliente_servicio (cliente_id, servicio_id),
+            INDEX idx_clientes_servicios_cliente (cliente_id),
+            INDEX idx_clientes_servicios_servicio (servicio_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
 } catch (Exception $e) {
     $errorMessage = 'No se pudieron preparar las tablas de cobros.';
 } catch (Error $e) {
@@ -112,6 +123,8 @@ if ($referenciaInput === '') {
     $referenciaInput = referencia_unica();
 }
 
+$serviciosIniciales = [];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
     if ($deleteId > 0) {
@@ -158,6 +171,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     }
     if ($clienteId <= 0) {
         $errors[] = 'Selecciona un cliente válido.';
+    }
+    if ($clienteId > 0 && $servicioId > 0) {
+        try {
+            $stmt = db()->prepare('SELECT COUNT(*) FROM clientes_servicios WHERE cliente_id = ? AND servicio_id = ?');
+            $stmt->execute([$clienteId, $servicioId]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                $errors[] = 'El servicio seleccionado no está asignado al cliente.';
+            }
+        } catch (Exception $e) {
+            $errors[] = 'No se pudo validar el servicio del cliente.';
+        } catch (Error $e) {
+            $errors[] = 'No se pudo validar el servicio del cliente.';
+        }
     }
     if ($monto === '' || !is_numeric($monto) || (float) $monto < 0) {
         $errors[] = 'Ingresa un monto válido.';
@@ -230,10 +256,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
 
 $clientes = [];
 $servicios = [];
+$serviciosPorCliente = [];
 $cobros = [];
 try {
     $clientes = db()->query('SELECT id, codigo, nombre, color_hex FROM clientes WHERE estado = 1 ORDER BY nombre')->fetchAll();
     $servicios = db()->query('SELECT id, nombre, monto FROM servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
+    $asignaciones = db()->query(
+        'SELECT cs.cliente_id,
+                s.id,
+                s.nombre,
+                s.monto
+         FROM clientes_servicios cs
+         JOIN servicios s ON s.id = cs.servicio_id
+         WHERE s.estado = 1
+         ORDER BY s.nombre'
+    )->fetchAll();
+    foreach ($asignaciones as $asignacion) {
+        $clienteId = (int) $asignacion['cliente_id'];
+        if (!isset($serviciosPorCliente[$clienteId])) {
+            $serviciosPorCliente[$clienteId] = [];
+        }
+        $serviciosPorCliente[$clienteId][] = [
+            'id' => (int) $asignacion['id'],
+            'nombre' => $asignacion['nombre'],
+            'monto' => $asignacion['monto'],
+        ];
+    }
     $cobros = db()->query(
         'SELECT cs.id,
                 COALESCE(c.nombre, cs.cliente) AS cliente,
@@ -261,6 +309,10 @@ try {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los registros de cobros.';
 } catch (Error $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los registros de cobros.';
+}
+
+if ($cobroEdit && isset($cobroEdit['cliente_id'])) {
+    $serviciosIniciales = $serviciosPorCliente[(int) $cobroEdit['cliente_id']] ?? [];
 }
 ?>
 <?php include('partials/html.php'); ?>
@@ -316,15 +368,17 @@ try {
                                         <div class="col-md-6">
                                             <label class="form-label" for="cobro-servicio">Servicio</label>
                                             <select id="cobro-servicio" name="servicio_id" class="form-select" required>
-                                                <option value="">Selecciona un servicio</option>
-                                                <?php foreach ($servicios as $servicio) : ?>
-                                                <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
-                                                    <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                </option>
+                                                <option value=""><?php echo empty($serviciosIniciales) ? 'Selecciona un cliente primero' : 'Selecciona un servicio'; ?></option>
+                                                <?php foreach ($serviciosIniciales as $servicio) : ?>
+                                                    <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                    </option>
                                                 <?php endforeach; ?>
                                             </select>
                                             <?php if (empty($servicios)) : ?>
                                                 <small class="text-muted d-block mt-2">Primero registra servicios activos en "Agregar servicio".</small>
+                                            <?php elseif (empty($serviciosIniciales)) : ?>
+                                                <small class="text-muted d-block mt-2">Asigna servicios al cliente para habilitar el listado.</small>
                                             <?php endif; ?>
                                         </div>
                                         <div class="col-md-6">
@@ -599,9 +653,44 @@ try {
         (function () {
             const servicioSelect = document.getElementById('cobro-servicio');
             const montoInput = document.getElementById('cobro-monto');
+            const clienteSelect = document.getElementById('cobro-cliente');
             const primerAvisoInput = document.getElementById('cobro-primer-aviso');
             const segundoAvisoInput = document.getElementById('cobro-segundo-aviso');
             const tercerAvisoInput = document.getElementById('cobro-tercer-aviso');
+            const serviciosPorCliente = <?php echo json_encode($serviciosPorCliente); ?>;
+            const servicioSeleccionado = <?php echo (int) ($cobroEdit['servicio_id'] ?? 0); ?>;
+
+            function renderServicios(clienteId) {
+                if (!servicioSelect) {
+                    return;
+                }
+                servicioSelect.innerHTML = '';
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                if (!clienteId) {
+                    placeholder.textContent = 'Selecciona un cliente primero';
+                    servicioSelect.appendChild(placeholder);
+                    return;
+                }
+                const servicios = serviciosPorCliente[clienteId] || [];
+                if (!servicios.length) {
+                    placeholder.textContent = 'No hay servicios asignados';
+                    servicioSelect.appendChild(placeholder);
+                    return;
+                }
+                placeholder.textContent = 'Selecciona un servicio';
+                servicioSelect.appendChild(placeholder);
+                servicios.forEach((servicio) => {
+                    const option = document.createElement('option');
+                    option.value = servicio.id;
+                    option.textContent = servicio.nombre;
+                    option.dataset.monto = servicio.monto;
+                    if (servicioSeleccionado && Number(servicioSeleccionado) === Number(servicio.id)) {
+                        option.selected = true;
+                    }
+                    servicioSelect.appendChild(option);
+                });
+            }
 
             if (servicioSelect && montoInput) {
                 servicioSelect.addEventListener('change', function () {
@@ -611,6 +700,16 @@ try {
                         montoInput.value = monto;
                     }
                 });
+            }
+
+            if (clienteSelect) {
+                clienteSelect.addEventListener('change', function () {
+                    renderServicios(clienteSelect.value);
+                    if (montoInput) {
+                        montoInput.value = '';
+                    }
+                });
+                renderServicios(clienteSelect.value);
             }
 
             if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {

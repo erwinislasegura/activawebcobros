@@ -100,6 +100,9 @@
                         <li class="side-nav-item">
                             <a href="clientes-crear.php" class="side-nav-link">Crear cliente</a>
                         </li>
+                        <li class="side-nav-item">
+                            <a href="clientes-servicios.php" class="side-nav-link">Servicios por cliente</a>
+                        </li>
                     </ul>
                 </div>
             </li>
