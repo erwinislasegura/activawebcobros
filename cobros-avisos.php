@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/app/bootstrap.php';
+require __DIR__ . '/app/aviso-templates.php';
 
 $errorMessage = '';
 $successMessage = '';
@@ -43,124 +44,15 @@ try {
 } catch (Error $e) {
 }
 
-function build_aviso_template(string $primary, string $accent, string $titulo, string $mensaje): string
-{
-    return <<<HTML
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{$titulo}</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f8fafc;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f8fafc" style="margin:0;padding:0;">
-    <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
-          <tr>
-            <td style="padding:0;background:{$primary};">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <table cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="vertical-align:middle;">
-                          <img src="{{municipalidad_logo}}" alt="Logo" height="30" style="display:block;border:0;">
-                        </td>
-                        <td style="vertical-align:middle;padding-left:10px;color:#ffffff;font-weight:700;font-size:15px;">
-                          {{municipalidad_nombre}}
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td align="right" style="padding:16px 20px;color:#e5e7eb;font-size:12px;white-space:nowrap;">
-                    {$titulo}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="height:4px;background:{$accent};line-height:4px;font-size:0;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="padding:26px 24px 10px 24px;color:#111827;font-size:14px;line-height:1.65;">
-              <p style="margin:0 0 12px 0;">Hola <strong>{{cliente_nombre}}</strong>,</p>
-              <p style="margin:0 0 16px 0;color:#374151;">{$mensaje}</p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 18px 0;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
-                <tr>
-                  <td style="padding:14px;">
-                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.6;color:#374151;">
-                      <tr>
-                        <td style="padding-top:6px;width:140px;color:#6B7280;"><strong>Servicio</strong></td>
-                        <td style="padding-top:6px;">{{servicio_nombre}}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding-top:6px;color:#6B7280;"><strong>Monto</strong></td>
-                        <td style="padding-top:6px;">{{monto}}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding-top:6px;color:#6B7280;"><strong>Fecha aviso</strong></td>
-                        <td style="padding-top:6px;">{{fecha_aviso}}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding-top:6px;color:#6B7280;"><strong>Referencia</strong></td>
-                        <td style="padding-top:6px;">{{referencia}}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 12px 0;color:#4B5563;">
-                Si tienes alguna consulta, puedes contactarnos respondiendo este correo.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:16px 24px 22px 24px;background:#ffffff;border-top:1px solid #eef2f7;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="font-size:12px;color:#6B7280;line-height:1.5;">
-                    Mensaje automático de {{municipalidad_nombre}}.
-                  </td>
-                  <td align="right" style="font-size:12px;color:#6B7280;white-space:nowrap;">
-                    <span style="display:inline-block;width:10px;height:10px;border-radius:999px;background:{$primary};vertical-align:middle;margin-right:6px;"></span>
-                    {$titulo}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-HTML;
-}
-
-$templateKeys = [
-    'aviso_1' => 'Aviso 1',
-    'aviso_2' => 'Aviso 2',
-    'aviso_3' => 'Aviso 3',
-];
-
-$defaultTemplates = [
-    'aviso_1' => [
-        'subject' => 'Aviso 1: {{servicio_nombre}} - {{cliente_nombre}}',
-        'body_html' => build_aviso_template('#1D4ED8', '#93C5FD', 'Aviso 1', 'Te recordamos el vencimiento del servicio.'),
+$templateOptions = get_aviso_template_options();
+$templateKeys = array_keys($templateOptions);
+$defaultTemplates = array_map(
+    static fn(array $template): array => [
+        'subject' => $template['subject'],
+        'body_html' => $template['body_html'],
     ],
-    'aviso_2' => [
-        'subject' => 'Aviso 2: {{servicio_nombre}} - {{cliente_nombre}}',
-        'body_html' => build_aviso_template('#F59E0B', '#FCD34D', 'Aviso 2', 'Este es el segundo aviso de tu servicio.'),
-    ],
-    'aviso_3' => [
-        'subject' => 'Aviso 3: {{servicio_nombre}} - {{cliente_nombre}}',
-        'body_html' => build_aviso_template('#DC2626', '#FCA5A5', 'Aviso 3', 'Último aviso antes de tomar acciones adicionales.'),
-    ],
-];
+    $templateOptions
+);
 
 function render_template(string $template, array $data): string
 {
