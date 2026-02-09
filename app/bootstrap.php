@@ -31,6 +31,7 @@ if (!isset($_SESSION['user'])) {
         'medios-acreditacion-imprimir.php',
         'eventos-acreditacion-medios.php',
         'm.php',
+        'confirmation.php',
     ];
 
     if (!in_array($currentScript, $publicScripts, true) && strncmp($currentScript, 'auth-', 5) !== 0) {
@@ -258,4 +259,18 @@ function has_permission(string $module, string $action = 'view'): bool
     } catch (Error $e) {
         return true;
     }
+}
+
+function flow_user_can_access(): bool
+{
+    if (!isset($_SESSION['user']['rol'])) {
+        return false;
+    }
+
+    $role = strtolower((string) $_SESSION['user']['rol']);
+    if ($role === '') {
+        return false;
+    }
+
+    return str_contains($role, 'admin') || str_contains($role, 'super') || str_contains($role, 'finanzas');
 }
