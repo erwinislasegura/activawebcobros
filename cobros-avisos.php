@@ -309,7 +309,6 @@ try {
                                         <th>Cliente</th>
                                         <th>Servicio</th>
                                         <th>Referencia</th>
-                                        <th>Avisos</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -357,10 +356,9 @@ try {
                                                 </td>
                                                 <td><?php echo htmlspecialchars($servicio, ENT_QUOTES, 'UTF-8'); ?></td>
                                                 <td><?php echo htmlspecialchars($referencia, ENT_QUOTES, 'UTF-8'); ?></td>
-                                                <td class="text-muted small">Avisos en el detalle inferior</td>
                                             </tr>
                                             <tr class="table-light">
-                                                <td colspan="4">
+                                                <td colspan="3">
                                                     <div class="d-flex flex-wrap gap-2">
                                                         <?php foreach ($avisos as $aviso) : ?>
                                                             <?php
