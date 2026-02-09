@@ -1,16 +1,16 @@
-<?php include __DIR__ . '/../../../partials/html.php'; ?>
+<?php include __DIR__ . '/../../../../partials/html.php'; ?>
 
 <head>
-    <?php $title = 'Crear pago Flow'; include __DIR__ . '/../../../partials/title-meta.php'; ?>
-    <?php include __DIR__ . '/../../../partials/head-css.php'; ?>
+    <?php $title = 'Crear pago Flow'; include __DIR__ . '/../../../../partials/title-meta.php'; ?>
+    <?php include __DIR__ . '/../../../../partials/head-css.php'; ?>
 </head>
 
 <body>
 <div class="wrapper">
-    <?php include __DIR__ . '/../../../partials/menu.php'; ?>
+    <?php include __DIR__ . '/../../../../partials/menu.php'; ?>
     <div class="content-page">
         <div class="container-fluid">
-            <?php $subtitle = 'Pagos Flow'; $title = 'Crear pago'; include __DIR__ . '/../../../partials/page-title.php'; ?>
+            <?php $subtitle = 'Pagos Flow'; $title = 'Crear pago'; include __DIR__ . '/../../../../partials/page-title.php'; ?>
 
             <div class="row">
                 <div class="col-12">
@@ -72,10 +72,10 @@
                 </div>
             </div>
         </div>
-        <?php include __DIR__ . '/../../../partials/footer.php'; ?>
+        <?php include __DIR__ . '/../../../../partials/footer.php'; ?>
     </div>
 </div>
-<?php include __DIR__ . '/../../../partials/customizer.php'; ?>
-<?php include __DIR__ . '/../../../partials/footer-scripts.php'; ?>
+<?php include __DIR__ . '/../../../../partials/customizer.php'; ?>
+<?php include __DIR__ . '/../../../../partials/footer-scripts.php'; ?>
 </body>
 </html>
