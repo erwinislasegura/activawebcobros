@@ -59,6 +59,36 @@ function render_template(string $template, array $data): string
     return strtr($template, $data);
 }
 
+function append_payment_button(string $bodyHtml, string $link): string
+{
+    if ($link === '') {
+        return $bodyHtml;
+    }
+
+    if (str_contains($bodyHtml, $link)) {
+        return $bodyHtml;
+    }
+
+    $safeLink = htmlspecialchars($link, ENT_QUOTES, 'UTF-8');
+    $buttonHtml = <<<HTML
+<table cellpadding="0" cellspacing="0" style="margin:18px 0;">
+  <tr>
+    <td>
+      <a href="{$safeLink}" style="background:#1D4ED8;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;">
+        Pagar ahora
+      </a>
+    </td>
+  </tr>
+</table>
+HTML;
+
+    if (str_contains($bodyHtml, '</body>')) {
+        return str_replace('</body>', $buttonHtml . "\n</body>", $bodyHtml);
+    }
+
+    return $bodyHtml . "\n" . $buttonHtml;
+}
+
 $municipalidad = get_municipalidad();
 $logoPath = $municipalidad['logo_path'] ?? 'assets/images/logo.png';
 $logoUrl = preg_match('/^https?:\/\//', $logoPath) ? $logoPath : base_url() . '/' . ltrim($logoPath, '/');
@@ -109,7 +139,8 @@ try {
                         cs.fecha_primer_aviso,
                         cs.fecha_segundo_aviso,
                         cs.fecha_tercer_aviso,
-                        s.nombre AS servicio
+                        s.nombre AS servicio,
+                        s.link_boton_pago
                  FROM cobros_servicios cs
                  LEFT JOIN clientes c ON c.id = cs.cliente_id
                  JOIN servicios s ON s.id = cs.servicio_id
@@ -149,9 +180,11 @@ try {
                         '{{monto}}' => '$' . number_format((float) $cobro['monto'], 2, ',', '.'),
                         '{{fecha_aviso}}' => date('d/m/Y', strtotime((string) $fechaAviso)),
                         '{{referencia}}' => (string) ($cobro['referencia'] ?? ''),
+                        '{{link_boton_pago}}' => (string) ($cobro['link_boton_pago'] ?? ''),
                     ];
                     $subject = render_template($template['subject'], $data);
                     $bodyHtml = render_template($template['body_html'], $data);
+                    $bodyHtml = append_payment_button($bodyHtml, (string) ($cobro['link_boton_pago'] ?? ''));
                     $headers = [
                         'MIME-Version: 1.0',
                         'Content-type: text/html; charset=UTF-8',
