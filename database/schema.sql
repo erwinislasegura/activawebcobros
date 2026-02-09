@@ -400,7 +400,7 @@ CREATE TABLE `pagos_clientes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `municipalidad` (`nombre`, `rut`, `direccion`, `telefono`, `correo`, `logo_path`, `logo_inicio_path`, `color_primary`, `color_secondary`)
-VALUES ('Go Muni', NULL, NULL, NULL, NULL, 'assets/images/logo.png', 'assets/images/logo.png', '#6658dd', '#4a81d4');
+VALUES ('Go Cobros', NULL, NULL, NULL, NULL, 'assets/images/logo.png', 'assets/images/logo.png', '#6658dd', '#4a81d4');
 
 INSERT INTO `notificacion_correos` (`correo_imap`, `password_imap`, `host_imap`, `puerto_imap`, `seguridad_imap`, `from_nombre`, `from_correo`)
 VALUES ('notificaciones@municipalidad.cl', 'cambiar_password', 'imap.municipalidad.cl', 993, 'ssl', 'Sistema Municipal', 'notificaciones@municipalidad.cl');

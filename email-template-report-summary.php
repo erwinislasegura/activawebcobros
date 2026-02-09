@@ -84,11 +84,11 @@
   <div class="email-wrapper">
     <div class="email-content">
       <div class="email-header">
-        <a href="#"><img src="assets/images/logo.png" alt="Go Muni" /></a>
+        <a href="#"><img src="assets/images/logo.png" alt="Go Cobros" /></a>
         <span>Your monthly summary is ready.</span>
       </div>
       <div class="email-body">
-        <h2>Go Muni Monthly Report - June 2025</h2>
+        <h2>Go Cobros Monthly Report - June 2025</h2>
         <p>Here’s a quick summary of your activity this month:</p>
         <ul>
           <li><strong>Reports Generated:</strong> 12</li>
@@ -98,7 +98,7 @@
         <p style="text-align: center;">
           <a href="#" class="btn">View Full Report</a>
         </p>
-        <p>We appreciate your continued trust in <b>Go Muni</b>.</p>
+        <p>We appreciate your continued trust in <b>Go Cobros</b>.</p>
       </div>
       <div class="email-footer">
         <a href="#">Update Preferences</a> or <a href="#">Unsubscribe</a>.
