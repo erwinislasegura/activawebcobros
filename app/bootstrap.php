@@ -124,6 +124,7 @@ function get_municipalidad(): array
         'logo_sidenav_height' => 48,
         'logo_sidenav_height_sm' => 36,
         'logo_auth_height' => 48,
+        'logo_inicio_path' => 'assets/images/logo.png',
         'color_primary' => '#6658dd',
         'color_secondary' => '#4a81d4',
     ];

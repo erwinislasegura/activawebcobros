@@ -4,10 +4,11 @@ require __DIR__ . '/app/bootstrap.php';
 $modules = [
     ['key' => 'usuarios', 'label' => 'Usuarios', 'permisos' => ['view', 'create', 'edit', 'delete']],
     ['key' => 'roles', 'label' => 'Roles', 'permisos' => ['view', 'create', 'edit', 'delete']],
-    ['key' => 'eventos', 'label' => 'Eventos', 'permisos' => ['view', 'create', 'edit', 'delete', 'publish']],
-    ['key' => 'autoridades', 'label' => 'Autoridades', 'permisos' => ['view', 'create', 'edit', 'delete', 'export']],
-    ['key' => 'mantenedores', 'label' => 'Mantenedores', 'permisos' => ['view', 'edit']],
-    ['key' => 'adjuntos', 'label' => 'Adjuntos', 'permisos' => ['view', 'create', 'delete']],
+    ['key' => 'clientes', 'label' => 'Clientes', 'permisos' => ['view', 'create', 'edit', 'delete']],
+    ['key' => 'servicios', 'label' => 'Servicios', 'permisos' => ['view', 'create', 'edit', 'delete']],
+    ['key' => 'cobros', 'label' => 'Cobros', 'permisos' => ['view', 'create', 'edit', 'delete']],
+    ['key' => 'avisos', 'label' => 'Avisos', 'permisos' => ['view', 'send']],
+    ['key' => 'mantenedores', 'label' => 'Configuración', 'permisos' => ['view', 'edit']],
 ];
 
 $permisosDisponibles = [
@@ -15,8 +16,7 @@ $permisosDisponibles = [
     'create' => 'Crear',
     'edit' => 'Editar',
     'delete' => 'Eliminar',
-    'publish' => 'Publicar',
-    'export' => 'Exportar',
+    'send' => 'Enviar',
 ];
 
 try {

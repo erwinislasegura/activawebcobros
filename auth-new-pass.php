@@ -3,6 +3,7 @@ require __DIR__ . '/app/bootstrap.php';
 
 $municipalidad = get_municipalidad();
 $logoAuthHeight = (int) ($municipalidad['logo_auth_height'] ?? 48);
+$logoInicioPath = $municipalidad['logo_inicio_path'] ?? $municipalidad['logo_path'] ?? 'assets/images/logo.png';
 $errors = [];
 $successMessage = '';
 $correoConfig = db()->query('SELECT * FROM notificacion_correos LIMIT 1')->fetch();
@@ -108,10 +109,10 @@ include('partials/html.php');
                         </div>
                         <div class="auth-brand text-center mb-4">
                             <a href="index.php" class="logo-dark">
-                                <img src="<?php echo htmlspecialchars($municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
+                                <img src="<?php echo htmlspecialchars($logoInicioPath, ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
                             </a>
                             <a href="index.php" class="logo-light">
-                                <img src="<?php echo htmlspecialchars($municipalidad['logo_path'] ?? 'assets/images/logo.png', ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
+                                <img src="<?php echo htmlspecialchars($logoInicioPath, ENT_QUOTES, 'UTF-8'); ?>" alt="logo" style="height: <?php echo $logoAuthHeight; ?>px;">
                             </a>
                             <p class="text-muted w-lg-75 mt-3 mx-auto">Ingresa tu correo para recibir el código de verificación.</p>
                         </div>
