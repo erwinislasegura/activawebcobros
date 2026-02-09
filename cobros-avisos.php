@@ -65,7 +65,11 @@ function append_payment_button(string $bodyHtml, string $link): string
         return $bodyHtml;
     }
 
-    if (str_contains($bodyHtml, $link) || str_contains($bodyHtml, 'Pagar ahora')) {
+    if (
+        str_contains($bodyHtml, $link)
+        || str_contains($bodyHtml, 'Pagar ahora')
+        || str_contains($bodyHtml, '{{link_boton_pago}}')
+    ) {
         return $bodyHtml;
     }
 
@@ -82,10 +86,14 @@ function append_payment_button(string $bodyHtml, string $link): string
 </table>
 HTML;
 
-    $footerMarker = "          <tr>\n            <td style=\"padding:16px 24px 22px 24px";
-    if (str_contains($bodyHtml, $footerMarker)) {
-        $insertion = "          <tr>\n            <td style=\"padding:0 24px 0 24px;\">\n{$buttonHtml}\n            </td>\n          </tr>\n";
-        return str_replace($footerMarker, $insertion . $footerMarker, $bodyHtml);
+    $footerPattern = '/<tr>\s*<td style="padding:16px 24px 22px 24px[^"]*">/i';
+    if (preg_match($footerPattern, $bodyHtml) === 1) {
+        return preg_replace(
+            $footerPattern,
+            "<tr>\n  <td style=\"padding:0 24px 0 24px;\">\n{$buttonHtml}\n  </td>\n</tr>\n$0",
+            $bodyHtml,
+            1
+        );
     }
 
     if (str_contains($bodyHtml, '</body>')) {
