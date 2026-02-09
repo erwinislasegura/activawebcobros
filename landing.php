@@ -85,7 +85,7 @@
                     <!-- Call to Action Buttons -->
                     <div class="d-flex gap-1 gap-sm-2 flex-wrap justify-content-center">
                         <a class="btn btn-primary py-2 fw-semibold" href="#">
-                            <i class="ti ti-basket fs-xl me-2"></i>Buy Go Muni Now!
+                            <i class="ti ti-basket fs-xl me-2"></i>Buy Go Cobros Now!
                         </a>
                     </div>
                 </div>
@@ -264,7 +264,7 @@
             <div class="row">
                 <div class="col-12 text-center">
                     <span class="text-muted rounded-3 d-inline-block">🚀 Designed for Performance & Scalability</span>
-                    <h2 class="mt-3 fw-bold mb-5">Discover the Core <span class="text-primary">Features</span> of Go Muni</h2>
+                    <h2 class="mt-3 fw-bold mb-5">Discover the Core <span class="text-primary">Features</span> of Go Cobros</h2>
                 </div>
             </div>
 
@@ -281,8 +281,8 @@
     
                 <!-- Content -->
                 <div class="col-lg-5 ms-auto py-3">
-                    <h3 class="mb-3 fs-xl lh-base">Powering Smart Admin Experiences with Go Muni</h3>
-                    <p class="mb-2 lead">Go Muni is a feature-rich, high-performance admin dashboard template built for modern web applications and enterprise-grade interfaces.</p>
+                    <h3 class="mb-3 fs-xl lh-base">Powering Smart Admin Experiences with Go Cobros</h3>
+                    <p class="mb-2 lead">Go Cobros is a feature-rich, high-performance admin dashboard template built for modern web applications and enterprise-grade interfaces.</p>
                     <p class="text-muted fs-sm mb-4">Streamline your workflow, monitor key metrics, and manage data seamlessly with intuitive UI and powerful components.</p>
                     <a href="#!" class="btn btn-primary mb-4">Launch Dashboard</a>
 
@@ -300,7 +300,7 @@
 
                         <div>
                             <h3 class="mb-2"><span data-target="3500">0</span><span class="text-primary">+</span></h3>
-                            <p class="text-muted mb-0">Businesses using Go Muni</p>
+                            <p class="text-muted mb-0">Businesses using Go Cobros</p>
                         </div>
                     </div>
                 </div><!-- end col-->
@@ -310,9 +310,9 @@
             <div class="row align-items-center">
                 <div class="col-lg-5 py-3 order-2 order-lg-1">
                     <h2 class="mb-3 fs-xl lh-base">Control Everything from One Unified Dashboard</h2>
-                    <p class="mb-2 lead">Go Muni empowers admins with a smart, responsive interface to manage users, analytics, content, and workflows effortlessly.</p>
+                    <p class="mb-2 lead">Go Cobros empowers admins with a smart, responsive interface to manage users, analytics, content, and workflows effortlessly.</p>
                     <p class="text-muted fs-sm mb-4">Track performance, automate tasks, and make data-driven decisions — all from a secure and scalable admin panel.</p>
-                    <a href="dashboard.php" class="btn btn-primary mb-4">Explore Go Muni Admin</a>
+                    <a href="dashboard.php" class="btn btn-primary mb-4">Explore Go Cobros Admin</a>
 
                     <!-- Counter -->
                     <div class="d-flex flex-wrap gap-4 mt-4">
@@ -648,7 +648,7 @@
                             </div>
                             <div>
                                 <span class="text-muted">Address</span>
-                                <h5 class="my-1 lh-lg">Go Muni HQ, 500 Innovation Drive, Suite 200, Metropolis, NY 10101, USA</h5>
+                                <h5 class="my-1 lh-lg">Go Cobros HQ, 500 Innovation Drive, Suite 200, Metropolis, NY 10101, USA</h5>
                             </div>
                         </div>
                     </div> <!-- end .p-4-->                    
@@ -702,7 +702,7 @@
                 <div class="col-lg-3">
                     <img src="assets/images/logo.png" alt="logo" height="24">
                     <p class="mt-3 fs-sm">
-                        Go Muni is a best-selling admin dashboard template on ThemeForest, recognized for its clean design, versatility, and robust features. Create modern, responsive web applications effortlessly with this top-tier solution!
+                        Go Cobros is a best-selling admin dashboard template on ThemeForest, recognized for its clean design, versatility, and robust features. Create modern, responsive web applications effortlessly with this top-tier solution!
                     </p>
 
                     <div class="d-flex gap-2 mt-4 mb-2">
@@ -764,7 +764,7 @@
 
             <div class="row mt-5">
                 <div class="col-12 text-center">
-                    <p class="mb-4">© <script>document.write(new Date().getFullYear())</script> Go Muni - tecnologia escalable </p>
+                    <p class="mb-4">© <script>document.write(new Date().getFullYear())</script> Go Cobros - tecnologia escalable </p>
                 </div>
             </div> <!-- end row-->
         </div> <!-- end container-->
