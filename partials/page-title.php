@@ -6,7 +6,7 @@
 
         <div class="text-end">
             <ol class="breadcrumb m-0 py-0">
-                <li class="breadcrumb-item"><a href="javascript: void(0);">Go Muni</a></li>
+                <li class="breadcrumb-item"><a href="javascript: void(0);">Go Cobros</a></li>
                 <?php if (!empty($subtitle)) : ?>
                     <li class="breadcrumb-item"><a href="javascript: void(0);"><?php echo ($subtitle); ?></a></li>
                 <?php endif ?>
