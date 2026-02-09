@@ -7,10 +7,18 @@ require __DIR__ . '/modules/flow/controllers/FlowConfigController.php';
 $controller = new FlowConfigController();
 $errors = [];
 $success = null;
+$warning = null;
 
 $config = $controller->getConfig();
+$tableError = $controller->getLastError();
+if ($tableError) {
+    $warning = $tableError;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    if ($tableError) {
+        $errors[] = $tableError;
+    }
     $environment = strtolower(trim($_POST['environment'] ?? ''));
     $apiKey = trim($_POST['api_key'] ?? '');
     $secretKey = trim($_POST['secret_key'] ?? '');
@@ -72,6 +80,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                                         <?php foreach ($errors as $error) : ?>
                                             <div><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div>
                                         <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if ($warning) : ?>
+                                    <div class="alert alert-warning">
+                                        <?php echo htmlspecialchars($warning, ENT_QUOTES, 'UTF-8'); ?>
                                     </div>
                                 <?php endif; ?>
 

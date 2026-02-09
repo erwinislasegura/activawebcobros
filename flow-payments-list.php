@@ -6,6 +6,7 @@ require __DIR__ . '/modules/flow/controllers/FlowPaymentsController.php';
 
 $controller = new FlowPaymentsController();
 $controller->ensureTables();
+$tableError = $controller->getLastError();
 
 $statusFilter = trim($_GET['status'] ?? '');
 $fromFilter = trim($_GET['from'] ?? '');
@@ -40,6 +41,11 @@ $orders = $controller->listOrders([
                                 <h5 class="card-title mb-0">Listado de órdenes</h5>
                             </div>
                             <div class="card-body">
+                                <?php if ($tableError) : ?>
+                                    <div class="alert alert-warning">
+                                        <?php echo htmlspecialchars($tableError, ENT_QUOTES, 'UTF-8'); ?>
+                                    </div>
+                                <?php endif; ?>
                                 <form class="row g-3 mb-3" method="get">
                                     <div class="col-md-3">
                                         <label class="form-label">Estado</label>

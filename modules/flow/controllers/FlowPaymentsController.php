@@ -4,45 +4,66 @@ declare(strict_types=1);
 
 class FlowPaymentsController
 {
+    private ?string $lastError = null;
+
     public function ensureTables(): void
     {
-        db()->exec(
-            'CREATE TABLE IF NOT EXISTS flow_orders (
-                id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                local_order_id VARCHAR(80) NOT NULL,
-                flow_token VARCHAR(80) DEFAULT NULL,
-                flow_order VARCHAR(80) DEFAULT NULL,
-                amount DECIMAL(12,2) NOT NULL,
-                currency VARCHAR(10) NOT NULL DEFAULT "CLP",
-                status VARCHAR(40) NOT NULL DEFAULT "pending",
-                payer_email VARCHAR(120) DEFAULT NULL,
-                raw_request MEDIUMTEXT DEFAULT NULL,
-                raw_response MEDIUMTEXT DEFAULT NULL,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL DEFAULT NULL,
-                PRIMARY KEY (id),
-                KEY idx_flow_orders_token (flow_token),
-                KEY idx_flow_orders_local (local_order_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-        );
+        $this->lastError = null;
 
-        db()->exec(
-            'CREATE TABLE IF NOT EXISTS flow_webhook_logs (
-                id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                token VARCHAR(80) NOT NULL,
-                payload MEDIUMTEXT DEFAULT NULL,
-                status VARCHAR(40) NOT NULL DEFAULT "received",
-                processed_at TIMESTAMP NULL DEFAULT NULL,
-                notes VARCHAR(255) DEFAULT NULL,
-                PRIMARY KEY (id),
-                KEY idx_flow_webhook_token (token)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-        );
+        try {
+            db()->exec(
+                'CREATE TABLE IF NOT EXISTS flow_orders (
+                    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    local_order_id VARCHAR(80) NOT NULL,
+                    flow_token VARCHAR(80) DEFAULT NULL,
+                    flow_order VARCHAR(80) DEFAULT NULL,
+                    amount DECIMAL(12,2) NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT "CLP",
+                    status VARCHAR(40) NOT NULL DEFAULT "pending",
+                    payer_email VARCHAR(120) DEFAULT NULL,
+                    raw_request MEDIUMTEXT DEFAULT NULL,
+                    raw_response MEDIUMTEXT DEFAULT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NULL DEFAULT NULL,
+                    PRIMARY KEY (id),
+                    KEY idx_flow_orders_token (flow_token),
+                    KEY idx_flow_orders_local (local_order_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+
+            db()->exec(
+                'CREATE TABLE IF NOT EXISTS flow_webhook_logs (
+                    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    token VARCHAR(80) NOT NULL,
+                    payload MEDIUMTEXT DEFAULT NULL,
+                    status VARCHAR(40) NOT NULL DEFAULT "received",
+                    processed_at TIMESTAMP NULL DEFAULT NULL,
+                    notes VARCHAR(255) DEFAULT NULL,
+                    PRIMARY KEY (id),
+                    KEY idx_flow_webhook_token (token)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+        } catch (Exception $e) {
+            $this->lastError = 'No fue posible preparar las tablas del módulo Flow.';
+        } catch (Error $e) {
+            $this->lastError = 'No fue posible preparar las tablas del módulo Flow.';
+        }
     }
 
     public function createPayment(FlowClient $client, array $payload): array
     {
         $this->ensureTables();
+        if ($this->lastError !== null) {
+            return [
+                'order_id' => 0,
+                'response' => [
+                    'success' => false,
+                    'status' => 0,
+                    'error' => $this->lastError,
+                    'data' => null,
+                ],
+            ];
+        }
         $requestData = $this->sanitizeRequest($payload);
         $response = $client->post('payment/create', $payload);
 
@@ -82,6 +103,9 @@ class FlowPaymentsController
     public function getOrderById(int $orderId): ?array
     {
         $this->ensureTables();
+        if ($this->lastError !== null) {
+            return null;
+        }
         $stmt = db()->prepare('SELECT * FROM flow_orders WHERE id = ?');
         $stmt->execute([$orderId]);
         $order = $stmt->fetch();
@@ -92,6 +116,9 @@ class FlowPaymentsController
     public function getOrderByLocalId(string $localOrderId): ?array
     {
         $this->ensureTables();
+        if ($this->lastError !== null) {
+            return null;
+        }
         $stmt = db()->prepare('SELECT * FROM flow_orders WHERE local_order_id = ? ORDER BY id DESC LIMIT 1');
         $stmt->execute([$localOrderId]);
         $order = $stmt->fetch();
@@ -102,6 +129,9 @@ class FlowPaymentsController
     public function listOrders(array $filters = []): array
     {
         $this->ensureTables();
+        if ($this->lastError !== null) {
+            return [];
+        }
         $conditions = [];
         $params = [];
 
@@ -135,6 +165,14 @@ class FlowPaymentsController
     public function updateStatusFromFlow(FlowClient $client, string $token): array
     {
         $this->ensureTables();
+        if ($this->lastError !== null) {
+            return [
+                'success' => false,
+                'status' => 0,
+                'error' => $this->lastError,
+                'data' => null,
+            ];
+        }
         $response = $client->get('payment/getStatus', [
             'apiKey' => $this->getApiKey(),
             'token' => $token,
@@ -157,6 +195,11 @@ class FlowPaymentsController
         }
 
         return $response;
+    }
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
     }
 
     private function sanitizeRequest(array $payload): array

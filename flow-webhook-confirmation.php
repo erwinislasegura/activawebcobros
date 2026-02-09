@@ -19,6 +19,9 @@ if ($config['api_key'] === '' || $config['secret_key'] === '') {
 
 $client = new FlowClient($config['api_key'], $config['secret_key'], $config['base_url']);
 $result = $webhookController->confirmation($client, $payload);
+if ($result['status'] === 500) {
+    error_log('Flow webhook error: ' . $result['message']);
+}
 
 http_response_code($result['status']);
 header('Content-Type: text/plain');

@@ -35,6 +35,10 @@ if ($config['api_key'] === '' || $config['secret_key'] === '') {
 
 $controller = new FlowPaymentsController();
 $controller->ensureTables();
+$tableError = $controller->getLastError();
+if ($tableError) {
+    $errors[] = $tableError;
+}
 
 if (empty($errors)) {
     $client = new FlowClient($config['api_key'], $config['secret_key'], $config['base_url']);

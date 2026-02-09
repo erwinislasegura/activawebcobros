@@ -6,6 +6,7 @@ require __DIR__ . '/modules/flow/controllers/FlowPaymentsController.php';
 
 $controller = new FlowPaymentsController();
 $controller->ensureTables();
+$tableError = $controller->getLastError();
 
 $config = flow_config();
 
@@ -42,6 +43,11 @@ $formData = [
                                 <p class="text-muted mb-0">Completa los datos para crear una orden y obtener el link de pago.</p>
                             </div>
                             <div class="card-body">
+                                <?php if ($tableError) : ?>
+                                    <div class="alert alert-warning">
+                                        <?php echo htmlspecialchars($tableError, ENT_QUOTES, 'UTF-8'); ?>
+                                    </div>
+                                <?php endif; ?>
                                 <form method="post" action="flow-payments-create.php">
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                     <div class="row">

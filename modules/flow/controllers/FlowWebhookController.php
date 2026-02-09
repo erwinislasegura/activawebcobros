@@ -11,6 +11,12 @@ class FlowWebhookController
     public function confirmation(FlowClient $client, array $payload): array
     {
         $this->paymentsController->ensureTables();
+        if ($this->paymentsController->getLastError() !== null) {
+            return [
+                'status' => 500,
+                'message' => 'No fue posible preparar las tablas de Flow.',
+            ];
+        }
         $token = trim((string) ($payload['token'] ?? ''));
 
         if ($token === '') {

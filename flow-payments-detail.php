@@ -6,6 +6,7 @@ require __DIR__ . '/modules/flow/controllers/FlowPaymentsController.php';
 
 $controller = new FlowPaymentsController();
 $controller->ensureTables();
+$tableError = $controller->getLastError();
 
 $orderId = isset($_GET['id']) ? (int) $_GET['id'] : null;
 $localOrderId = trim($_GET['local_order_id'] ?? '');
@@ -19,10 +20,15 @@ if ($orderId) {
 
 $errors = [];
 $statusMessage = null;
+if ($tableError) {
+    $errors[] = $tableError;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null) && $order) {
     $config = flow_config();
-    if ($config['api_key'] === '' || $config['secret_key'] === '') {
+    if ($tableError) {
+        $errors[] = $tableError;
+    } elseif ($config['api_key'] === '' || $config['secret_key'] === '') {
         $errors[] = 'Configura las credenciales de Flow para actualizar el estado.';
     } elseif (empty($order['flow_token'])) {
         $errors[] = 'Esta orden no tiene token de Flow asociado.';
