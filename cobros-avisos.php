@@ -359,27 +359,29 @@ try {
                                             </tr>
                                             <tr class="table-light">
                                                 <td colspan="3">
-                                                    <div class="d-flex flex-wrap gap-2">
+                                                    <div class="d-flex flex-column gap-1">
                                                         <?php foreach ($avisos as $aviso) : ?>
                                                             <?php
                                                             $disabled = ($correo === '' || $correo === null || $aviso['fecha'] === null || $aviso['fecha'] === '' || $fromEmail === '');
                                                             ?>
-                                                            <div class="border rounded-2 px-2 py-1 bg-white d-flex flex-wrap align-items-center gap-2">
-                                                                <span class="badge text-bg-light"><?php echo htmlspecialchars($aviso['short'], ENT_QUOTES, 'UTF-8'); ?></span>
-                                                                <?php if (!empty($aviso['sent'])) : ?>
-                                                                    <span class="badge text-bg-success">Enviado</span>
-                                                                <?php else : ?>
-                                                                    <span class="badge text-bg-warning">Pendiente</span>
-                                                                <?php endif; ?>
-                                                                <span class="text-muted small">
-                                                                    <?php echo $aviso['fecha'] ? htmlspecialchars(date('d/m/Y', strtotime($aviso['fecha'])), ENT_QUOTES, 'UTF-8') : 'Sin fecha'; ?>
-                                                                </span>
-                                                                <?php if (!empty($aviso['sent'])) : ?>
+                                                            <div class="border rounded-2 px-2 py-1 bg-white d-flex flex-wrap align-items-center justify-content-between gap-2 w-100">
+                                                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                                                    <span class="badge text-bg-light"><?php echo htmlspecialchars($aviso['short'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                                                    <?php if (!empty($aviso['sent'])) : ?>
+                                                                        <span class="badge text-bg-success">Enviado</span>
+                                                                    <?php else : ?>
+                                                                        <span class="badge text-bg-warning">Pendiente</span>
+                                                                    <?php endif; ?>
                                                                     <span class="text-muted small">
-                                                                        <?php echo htmlspecialchars(date('d/m/Y', strtotime($aviso['sent'])), ENT_QUOTES, 'UTF-8'); ?>
+                                                                        <?php echo $aviso['fecha'] ? htmlspecialchars(date('d/m/Y', strtotime($aviso['fecha'])), ENT_QUOTES, 'UTF-8') : 'Sin fecha'; ?>
                                                                     </span>
-                                                                <?php endif; ?>
-                                                                <form method="post" class="ms-auto">
+                                                                    <?php if (!empty($aviso['sent'])) : ?>
+                                                                        <span class="text-muted small">
+                                                                            <?php echo htmlspecialchars(date('d/m/Y', strtotime($aviso['sent'])), ENT_QUOTES, 'UTF-8'); ?>
+                                                                        </span>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                                <form method="post">
                                                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                                                     <input type="hidden" name="action" value="send_aviso">
                                                                     <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
