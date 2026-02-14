@@ -252,6 +252,7 @@ try {
          FROM cobros_servicios cs
          LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
+         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
          ORDER BY cs.id DESC'
     )->fetchAll();
 } catch (Exception $e) {
