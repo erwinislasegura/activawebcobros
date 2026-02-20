@@ -1,0 +1,3 @@
+-- DEPRECADO
+-- Este script fue reemplazado por: database/actualizacion_20260327_1500.sql
+-- Se conserva solo para compatibilidad histórica del repositorio.
