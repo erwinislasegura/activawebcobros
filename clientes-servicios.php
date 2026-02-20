@@ -13,6 +13,43 @@ function render_html_template(string $template, array $data): string
     return strtr($template, $data);
 }
 
+function append_suspension_payment_button(string $bodyHtml, string $link): string
+{
+    if ($link === '') {
+        return $bodyHtml;
+    }
+
+    if (str_contains($bodyHtml, $link) || str_contains($bodyHtml, '{{link_boton_pago}}') || str_contains($bodyHtml, 'Pagar ahora')) {
+        return $bodyHtml;
+    }
+
+    $safeLink = htmlspecialchars($link, ENT_QUOTES, 'UTF-8');
+    $buttonHtml = <<<HTML
+<table cellpadding="0" cellspacing="0" style="margin:18px 0;">
+  <tr>
+    <td>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+        <tr>
+          <td style="padding:14px;">
+            <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:6px;">Paga aquí</div>
+            <a href="{$safeLink}" style="background:#b91c1c;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;min-width:240px;text-align:center;">
+              Pagar ahora
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+HTML;
+
+    if (str_contains($bodyHtml, '</body>')) {
+        return str_replace('</body>', $buttonHtml . "\n</body>", $bodyHtml);
+    }
+
+    return $bodyHtml . "\n" . $buttonHtml;
+}
+
 function enviar_correo_suspension(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
 {
     $destinatario = trim($destinatario);
@@ -156,6 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                         c.nombre AS cliente_nombre,
                         c.correo AS cliente_correo,
                         s.nombre AS servicio_nombre,
+                        s.link_boton_pago,
                         COALESCE(cb.monto, s.monto) AS monto_pendiente,
                         cb.id AS cobro_id,
                         cb.estado AS cobro_estado
@@ -189,10 +227,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                     '{{motivo_suspension}}' => nl2br(htmlspecialchars($motivo, ENT_QUOTES, 'UTF-8')),
                     '{{detalle_suspension}}' => nl2br(htmlspecialchars($detalle !== '' ? $detalle : 'No informado.', ENT_QUOTES, 'UTF-8')),
                     '{{monto_pendiente}}' => '$' . number_format((float) ($detalleServicio['monto_pendiente'] ?? 0), 2, ',', '.'),
+                    '{{link_boton_pago}}' => htmlspecialchars((string) ($detalleServicio['link_boton_pago'] ?? ''), ENT_QUOTES, 'UTF-8'),
                 ];
 
                 $subject = render_html_template((string) $template['subject'], $data);
                 $bodyHtml = render_html_template((string) $template['body_html'], $data);
+                $bodyHtml = append_suspension_payment_button($bodyHtml, (string) ($detalleServicio['link_boton_pago'] ?? ''));
 
                 db()->beginTransaction();
                 $stmtInsert = db()->prepare('INSERT INTO clientes_servicios_suspensiones (cliente_servicio_id, cobro_id, motivo, detalle, correo_destinatario, created_by) VALUES (?, ?, ?, ?, ?, ?)');
