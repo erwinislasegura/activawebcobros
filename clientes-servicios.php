@@ -56,12 +56,30 @@ $defaultBody = <<<'HTML'
 </html>
 HTML;
 
+function enviar_correo_alta_servicio(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
+{
+    if ($destinatario === '' || $fromEmail === '') {
+        return false;
+    }
+
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/html; charset=UTF-8',
+        'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
+    ];
+
+    return @mail($destinatario, $asunto, $cuerpoHtml, implode("\r\n", $headers));
+}
+
 try {
     db()->exec(
         'CREATE TABLE IF NOT EXISTS clientes_servicios (
             id INT AUTO_INCREMENT PRIMARY KEY,
             cliente_id INT NOT NULL,
             servicio_id INT NOT NULL,
+            motivo TEXT NULL,
+            info_importante TEXT NULL,
+            correo_enviado_at DATETIME NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY uniq_cliente_servicio (cliente_id, servicio_id),
             INDEX idx_clientes_servicios_cliente (cliente_id),
@@ -114,6 +132,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
     }
     if ($motivo === '') {
         $errors[] = 'Debes indicar el motivo de suspensión.';
+    }
+    if ($motivo === '') {
+        $errors[] = 'Debes indicar el motivo del alta del servicio.';
     }
 
     if (empty($errors)) {
