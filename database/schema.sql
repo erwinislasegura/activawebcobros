@@ -367,6 +367,21 @@ CREATE TABLE `clientes_servicios` (
   KEY `idx_clientes_servicios_servicio` (`servicio_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE `clientes_servicios_suspensiones` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `cliente_servicio_id` INT NOT NULL,
+  `cobro_id` INT DEFAULT NULL,
+  `motivo` TEXT NOT NULL,
+  `detalle` TEXT DEFAULT NULL,
+  `correo_destinatario` VARCHAR(180) DEFAULT NULL,
+  `correo_enviado_at` DATETIME DEFAULT NULL,
+  `created_by` INT DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_css_cliente_servicio` (`cliente_servicio_id`),
+  KEY `idx_css_cobro` (`cobro_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE `cobros_servicios` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `servicio_id` INT NOT NULL,

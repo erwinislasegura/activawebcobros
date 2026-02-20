@@ -4,6 +4,57 @@ require __DIR__ . '/app/bootstrap.php';
 $errors = [];
 $errorMessage = '';
 $success = $_GET['success'] ?? '';
+$clienteFiltroId = (int) ($_GET['cliente_id'] ?? 0);
+
+$templateKey = 'suspension_servicio_urgente';
+
+function render_html_template(string $template, array $data): string
+{
+    return strtr($template, $data);
+}
+
+function enviar_correo_suspension(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
+{
+    if ($destinatario === '' || $fromEmail === '') {
+        return false;
+    }
+
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/html; charset=UTF-8',
+        'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
+    ];
+
+    return @mail($destinatario, $asunto, $cuerpoHtml, implode("\r\n", $headers));
+}
+
+$defaultSubject = 'URGENTE: Suspensión de servicio {{servicio_nombre}}';
+$defaultBody = <<<'HTML'
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Suspensión de servicio</title></head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f6fb"><tr><td align="center" style="padding:24px 12px;">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e6ebf2;">
+<tr><td style="padding:14px 18px;background:#9f1239;color:#fff;font-weight:700;">{{municipalidad_nombre}} · Notificación urgente</td></tr>
+<tr><td style="height:4px;background:#ef4444;line-height:4px;font-size:0;">&nbsp;</td></tr>
+<tr><td style="padding:24px;color:#1f2937;font-size:14px;line-height:1.65;">
+<p>Estimado/a <strong>{{cliente_nombre}}</strong>,</p>
+<p>Le informamos con carácter de <strong style="color:#b91c1c;">URGENTE</strong> que su servicio <strong>{{servicio_nombre}}</strong> ha sido suspendido por deuda pendiente.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0;background:#fff5f5;border:1px solid #fecaca;border-radius:10px;"><tr><td style="padding:12px;">
+<div><strong>Motivo:</strong> {{motivo_suspension}}</div>
+<div><strong>Detalle importante:</strong> {{detalle_suspension}}</div>
+<div><strong>Monto pendiente:</strong> {{monto_pendiente}}</div>
+</td></tr></table>
+<p style="margin:0 0 8px 0;">Esta suspensión implica que sus <strong>sitios web y correos asociados pueden quedar sin funcionamiento</strong>, lo que puede causar <strong>pérdida de seriedad y posicionamiento en internet</strong>.</p>
+<p>Regularice su pago a la brevedad para reactivar el servicio.</p>
+<p>Atentamente,<br><strong>{{municipalidad_nombre}}</strong></p>
+</td></tr>
+</table>
+</td></tr></table>
+</body>
+</html>
+HTML;
 
 function enviar_correo_alta_servicio(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
 {
@@ -36,51 +87,51 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
-    $columnasRequeridas = [
-        'motivo' => 'ALTER TABLE clientes_servicios ADD COLUMN motivo TEXT NULL AFTER servicio_id',
-        'info_importante' => 'ALTER TABLE clientes_servicios ADD COLUMN info_importante TEXT NULL AFTER motivo',
-        'correo_enviado_at' => 'ALTER TABLE clientes_servicios ADD COLUMN correo_enviado_at DATETIME NULL AFTER info_importante',
-    ];
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS clientes_servicios_suspensiones (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            cliente_servicio_id INT NOT NULL,
+            cobro_id INT DEFAULT NULL,
+            motivo TEXT NOT NULL,
+            detalle TEXT NULL,
+            correo_destinatario VARCHAR(180) NULL,
+            correo_enviado_at DATETIME NULL,
+            created_by INT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_css_cliente_servicio (cliente_servicio_id),
+            INDEX idx_css_cobro (cobro_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
 
-    foreach ($columnasRequeridas as $columna => $sqlAlter) {
-        $stmtColumna = db()->prepare('SHOW COLUMNS FROM clientes_servicios LIKE ?');
-        $stmtColumna->execute([$columna]);
-        if (!$stmtColumna->fetch()) {
-            db()->exec($sqlAlter);
-        }
-    }
+    db()->exec(
+        'CREATE TABLE IF NOT EXISTS email_templates (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            template_key VARCHAR(80) NOT NULL,
+            subject VARCHAR(200) NOT NULL,
+            body_html MEDIUMTEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY email_templates_key_unique (template_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
 } catch (Exception $e) {
-    $errorMessage = 'No se pudo preparar la tabla de servicios por cliente.';
+    $errorMessage = 'No se pudo preparar el módulo de suspensión de servicios.';
 } catch (Error $e) {
-    $errorMessage = 'No se pudo preparar la tabla de servicios por cliente.';
+    $errorMessage = 'No se pudo preparar el módulo de suspensión de servicios.';
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
-    $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
-    if ($deleteId > 0) {
-        try {
-            $stmt = db()->prepare('DELETE FROM clientes_servicios WHERE id = ?');
-            $stmt->execute([$deleteId]);
-            redirect('clientes-servicios.php');
-        } catch (Exception $e) {
-            $errorMessage = 'No se pudo eliminar la asignación.';
-        } catch (Error $e) {
-            $errorMessage = 'No se pudo eliminar la asignación.';
-        }
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_csrf($_POST['csrf_token'] ?? null)) {
-    $clienteId = (int) ($_POST['cliente_id'] ?? 0);
-    $servicioId = (int) ($_POST['servicio_id'] ?? 0);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspender' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $clienteServicioId = (int) ($_POST['cliente_servicio_id'] ?? 0);
+    $cobroId = (int) ($_POST['cobro_id'] ?? 0);
     $motivo = trim($_POST['motivo'] ?? '');
-    $infoImportante = trim($_POST['info_importante'] ?? '');
+    $detalle = trim($_POST['detalle'] ?? '');
+    $clienteFiltroId = (int) ($_POST['cliente_id'] ?? 0);
 
-    if ($clienteId <= 0) {
-        $errors[] = 'Selecciona un cliente válido.';
+    if ($clienteServicioId <= 0) {
+        $errors[] = 'No se identificó el servicio asociado al cliente.';
     }
-    if ($servicioId <= 0) {
-        $errors[] = 'Selecciona un servicio válido.';
+    if ($motivo === '') {
+        $errors[] = 'Debes indicar el motivo de suspensión.';
     }
     if ($motivo === '') {
         $errors[] = 'Debes indicar el motivo del alta del servicio.';
@@ -92,279 +143,240 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
             $fromEmail = trim((string) ($correoConfig['from_correo'] ?? $correoConfig['correo_imap'] ?? ''));
             $fromName = trim((string) ($correoConfig['from_nombre'] ?? ''));
 
+            $stmtTemplate = db()->prepare('SELECT subject, body_html FROM email_templates WHERE template_key = ? LIMIT 1');
+            $stmtTemplate->execute([$templateKey]);
+            $template = $stmtTemplate->fetch() ?: ['subject' => $defaultSubject, 'body_html' => $defaultBody];
+
             $stmtDetalle = db()->prepare(
-                'SELECT c.nombre AS cliente_nombre,
+                'SELECT cs.id AS cliente_servicio_id,
+                        c.id AS cliente_id,
+                        c.nombre AS cliente_nombre,
                         c.correo AS cliente_correo,
                         s.nombre AS servicio_nombre,
-                        s.monto AS servicio_monto
-                 FROM clientes c
-                 JOIN servicios s ON s.id = ?
-                 WHERE c.id = ?
+                        COALESCE(cb.monto, s.monto) AS monto_pendiente,
+                        cb.id AS cobro_id,
+                        cb.estado AS cobro_estado
+                 FROM clientes_servicios cs
+                 JOIN clientes c ON c.id = cs.cliente_id
+                 JOIN servicios s ON s.id = cs.servicio_id
+                 LEFT JOIN cobros_servicios cb ON cb.id = ?
+                 WHERE cs.id = ?
                  LIMIT 1'
             );
-            $stmtDetalle->execute([$servicioId, $clienteId]);
-            $detalle = $stmtDetalle->fetch();
+            $stmtDetalle->execute([$cobroId > 0 ? $cobroId : null, $clienteServicioId]);
+            $detalleServicio = $stmtDetalle->fetch();
 
-            if (!$detalle) {
-                $errorMessage = 'No se pudo obtener la información del cliente o servicio.';
-            } elseif (empty($detalle['cliente_correo'])) {
-                $errorMessage = 'El cliente no tiene correo configurado.';
+            if (!$detalleServicio) {
+                $errorMessage = 'No se encontró el servicio para suspensión.';
+            } elseif (($detalleServicio['cliente_correo'] ?? '') === '') {
+                $errorMessage = 'El cliente no tiene correo configurado para notificación.';
             } elseif ($fromEmail === '') {
-                $errorMessage = 'Configura el correo de envío en Notificaciones antes de dar de alta.';
+                $errorMessage = 'Configura el correo remitente en Correo de envío antes de suspender.';
             } else {
-                db()->beginTransaction();
-
-                $stmt = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, motivo, info_importante) VALUES (?, ?, ?, ?)');
-                $stmt->execute([
-                    $clienteId,
-                    $servicioId,
-                    $motivo,
-                    $infoImportante !== '' ? $infoImportante : null,
-                ]);
-
                 $municipalidad = get_municipalidad();
-                $nombreMunicipalidad = trim((string) ($municipalidad['nombre'] ?? 'Nuestra institución'));
+                $nombreMunicipalidad = (string) ($municipalidad['nombre'] ?? 'Nuestra institución');
                 if ($fromName === '') {
                     $fromName = $nombreMunicipalidad;
                 }
 
-                $asunto = 'Alta de servicio: ' . (string) ($detalle['servicio_nombre'] ?? 'Servicio');
-                $montoTexto = '$' . number_format((float) ($detalle['servicio_monto'] ?? 0), 2, ',', '.');
-                $cuerpoHtml = '
-                    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
-                        <p>Estimado/a <strong>' . htmlspecialchars((string) $detalle['cliente_nombre'], ENT_QUOTES, 'UTF-8') . '</strong>,</p>
-                        <p>Junto con saludar, informamos que se ha dado de alta el siguiente servicio en su cuenta:</p>
-                        <ul>
-                            <li><strong>Servicio:</strong> ' . htmlspecialchars((string) $detalle['servicio_nombre'], ENT_QUOTES, 'UTF-8') . '</li>
-                            <li><strong>Monto referencial:</strong> ' . htmlspecialchars($montoTexto, ENT_QUOTES, 'UTF-8') . '</li>
-                            <li><strong>Motivo del alta:</strong> ' . nl2br(htmlspecialchars($motivo, ENT_QUOTES, 'UTF-8')) . '</li>
-                        </ul>
-                        <p><strong>Información importante:</strong><br>' . ($infoImportante !== '' ? nl2br(htmlspecialchars($infoImportante, ENT_QUOTES, 'UTF-8')) : 'Para más detalles, comuníquese con nuestra oficina de atención al cliente.') . '</p>
-                        <p>Este correo tiene carácter informativo y forma parte de nuestros registros de atención.</p>
-                        <p>Atentamente,<br><strong>' . htmlspecialchars($nombreMunicipalidad, ENT_QUOTES, 'UTF-8') . '</strong></p>
-                    </div>';
+                $data = [
+                    '{{municipalidad_nombre}}' => htmlspecialchars($nombreMunicipalidad, ENT_QUOTES, 'UTF-8'),
+                    '{{cliente_nombre}}' => htmlspecialchars((string) $detalleServicio['cliente_nombre'], ENT_QUOTES, 'UTF-8'),
+                    '{{servicio_nombre}}' => htmlspecialchars((string) $detalleServicio['servicio_nombre'], ENT_QUOTES, 'UTF-8'),
+                    '{{motivo_suspension}}' => nl2br(htmlspecialchars($motivo, ENT_QUOTES, 'UTF-8')),
+                    '{{detalle_suspension}}' => nl2br(htmlspecialchars($detalle !== '' ? $detalle : 'No informado.', ENT_QUOTES, 'UTF-8')),
+                    '{{monto_pendiente}}' => '$' . number_format((float) ($detalleServicio['monto_pendiente'] ?? 0), 2, ',', '.'),
+                ];
 
-                $correoEnviado = enviar_correo_alta_servicio((string) $detalle['cliente_correo'], $asunto, $cuerpoHtml, $fromEmail, $fromName);
+                $subject = render_html_template((string) $template['subject'], $data);
+                $bodyHtml = render_html_template((string) $template['body_html'], $data);
 
-                if (!$correoEnviado) {
+                db()->beginTransaction();
+                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios_suspensiones (cliente_servicio_id, cobro_id, motivo, detalle, correo_destinatario, created_by) VALUES (?, ?, ?, ?, ?, ?)');
+                $stmtInsert->execute([
+                    (int) $detalleServicio['cliente_servicio_id'],
+                    $cobroId > 0 ? $cobroId : null,
+                    $motivo,
+                    $detalle !== '' ? $detalle : null,
+                    (string) $detalleServicio['cliente_correo'],
+                    isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null,
+                ]);
+
+                $enviado = enviar_correo_suspension((string) $detalleServicio['cliente_correo'], $subject, $bodyHtml, $fromEmail, $fromName);
+                if (!$enviado) {
                     db()->rollBack();
-                    $errorMessage = 'No se pudo enviar el correo de alta. Verifica la configuración de correo e inténtalo nuevamente.';
+                    $errorMessage = 'No se pudo enviar el correo urgente de suspensión.';
                 } else {
                     $nuevoId = (int) db()->lastInsertId();
-                    $stmtUpdate = db()->prepare('UPDATE clientes_servicios SET correo_enviado_at = NOW() WHERE id = ?');
+                    $stmtUpdate = db()->prepare('UPDATE clientes_servicios_suspensiones SET correo_enviado_at = NOW() WHERE id = ?');
                     $stmtUpdate->execute([$nuevoId]);
                     db()->commit();
-                    redirect('clientes-servicios.php?success=1');
+                    redirect('clientes-servicios.php?success=1&cliente_id=' . (int) $detalleServicio['cliente_id']);
                 }
             }
         } catch (Exception $e) {
             if (db()->inTransaction()) {
                 db()->rollBack();
             }
-            $errorMessage = 'No se pudo dar de alta el servicio para el cliente.';
+            $errorMessage = 'No se pudo completar la suspensión del servicio.';
         } catch (Error $e) {
             if (db()->inTransaction()) {
                 db()->rollBack();
             }
-            $errorMessage = 'No se pudo dar de alta el servicio para el cliente.';
+            $errorMessage = 'No se pudo completar la suspensión del servicio.';
         }
     }
 }
 
 $clientes = [];
-$servicios = [];
-$asignaciones = [];
+$serviciosPendientes = [];
+$suspensiones = [];
 try {
     $clientes = db()->query('SELECT id, codigo, nombre FROM clientes WHERE estado = 1 ORDER BY nombre')->fetchAll();
-    $servicios = db()->query('SELECT id, nombre, monto FROM servicios WHERE estado = 1 ORDER BY nombre')->fetchAll();
-    $asignaciones = db()->query(
-        'SELECT cs.id,
-                c.codigo AS cliente_codigo,
-                c.nombre AS cliente,
-                s.nombre AS servicio,
-                s.monto AS monto,
-                cs.motivo,
-                cs.info_importante,
-                cs.correo_enviado_at,
-                cs.created_at
-         FROM clientes_servicios cs
-         JOIN clientes c ON c.id = cs.cliente_id
-         JOIN servicios s ON s.id = cs.servicio_id
-         ORDER BY cs.id DESC'
-    )->fetchAll();
+
+    $sqlPendientes = 'SELECT cs.id AS cliente_servicio_id,
+                             c.id AS cliente_id,
+                             c.codigo AS cliente_codigo,
+                             c.nombre AS cliente,
+                             c.correo AS cliente_correo,
+                             s.nombre AS servicio,
+                             cb.id AS cobro_id,
+                             cb.monto,
+                             cb.estado,
+                             cb.fecha_cobro,
+                             cb.created_at
+                      FROM clientes_servicios cs
+                      JOIN clientes c ON c.id = cs.cliente_id
+                      JOIN servicios s ON s.id = cs.servicio_id
+                      JOIN cobros_servicios cb ON cb.cliente_id = cs.cliente_id AND cb.servicio_id = cs.servicio_id
+                      WHERE LOWER(TRIM(cb.estado)) <> "pagado"';
+
+    if ($clienteFiltroId > 0) {
+        $sqlPendientes .= ' AND c.id = ' . (int) $clienteFiltroId;
+    }
+
+    $sqlPendientes .= ' ORDER BY cb.id DESC';
+    $serviciosPendientes = db()->query($sqlPendientes)->fetchAll();
+
+    $sqlSuspensiones = 'SELECT ss.id,
+                               c.codigo AS cliente_codigo,
+                               c.nombre AS cliente,
+                               s.nombre AS servicio,
+                               ss.motivo,
+                               ss.detalle,
+                               ss.correo_destinatario,
+                               ss.correo_enviado_at,
+                               ss.created_at
+                        FROM clientes_servicios_suspensiones ss
+                        JOIN clientes_servicios cs ON cs.id = ss.cliente_servicio_id
+                        JOIN clientes c ON c.id = cs.cliente_id
+                        JOIN servicios s ON s.id = cs.servicio_id';
+    if ($clienteFiltroId > 0) {
+        $sqlSuspensiones .= ' WHERE c.id = ' . (int) $clienteFiltroId;
+    }
+    $sqlSuspensiones .= ' ORDER BY ss.id DESC LIMIT 100';
+    $suspensiones = db()->query($sqlSuspensiones)->fetchAll();
 } catch (Exception $e) {
-    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar las altas de servicios.';
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo cargar el módulo de suspensión.';
 } catch (Error $e) {
-    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar las altas de servicios.';
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo cargar el módulo de suspensión.';
 }
 ?>
 <?php include('partials/html.php'); ?>
-
 <head>
-    <?php $title = "Alta de servicios por cliente";
-    include('partials/title-meta.php'); ?>
-
+    <?php $title = "Suspensión de servicios"; include('partials/title-meta.php'); ?>
     <?php include('partials/head-css.php'); ?>
 </head>
-
 <body>
-    <!-- Begin page -->
-    <div class="wrapper">
+<div class="wrapper">
+    <?php include('partials/menu.php'); ?>
+    <div class="content-page">
+        <div class="container-fluid">
+            <?php $subtitle = "Clientes"; $title = "Suspender servicios"; include('partials/page-title.php'); ?>
 
-        <?php include('partials/menu.php'); ?>
+            <?php if ($success === '1') : ?><div class="alert alert-success">Servicio suspendido y notificación urgente enviada.</div><?php endif; ?>
+            <?php if ($errorMessage !== '') : ?><div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
 
-        <div class="content-page">
-
-            <div class="container-fluid">
-
-                <?php $subtitle = "Clientes";
-                $title = "Dar de alta servicio";
-                include('partials/page-title.php'); ?>
-
-                <?php if ($success === '1') : ?>
-                    <div class="alert alert-success">Servicio dado de alta y correo enviado correctamente.</div>
-                <?php endif; ?>
-
-                <?php if ($errorMessage !== '') : ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?></div>
-                <?php endif; ?>
-
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">Alta de servicio para cliente</h5>
-                                <p class="text-muted mb-0">Registra el alta, el motivo y envía notificación formal al correo del cliente.</p>
-                            </div>
-                            <div class="card-body">
-                                <?php if (!empty($errors)) : ?>
-                                    <div class="alert alert-danger">
-                                        <?php foreach ($errors as $error) : ?>
-                                            <div><?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                                <form method="post">
-                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <label class="form-label" for="cliente-servicio">Cliente</label>
-                                            <select id="cliente-servicio" name="cliente_id" class="form-select" required>
-                                                <option value="">Selecciona un cliente</option>
-                                                <?php foreach ($clientes as $cliente) : ?>
-                                                    <option value="<?php echo (int) $cliente['id']; ?>">
-                                                        <?php echo htmlspecialchars(($cliente['codigo'] ?? '') . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <?php if (empty($clientes)) : ?>
-                                                <small class="text-muted d-block mt-2">Primero registra clientes activos.</small>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label" for="servicio-cliente">Servicio</label>
-                                            <select id="servicio-cliente" name="servicio_id" class="form-select" required>
-                                                <option value="">Selecciona un servicio</option>
-                                                <?php foreach ($servicios as $servicio) : ?>
-                                                    <option value="<?php echo (int) $servicio['id']; ?>">
-                                                        <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <?php if (empty($servicios)) : ?>
-                                                <small class="text-muted d-block mt-2">Primero registra servicios activos.</small>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label" for="motivo-alta">Motivo del alta</label>
-                                            <textarea id="motivo-alta" name="motivo" class="form-control" rows="3" required placeholder="Ej.: incorporación de plan de mantenimiento anual"></textarea>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label" for="info-importante">Información importante</label>
-                                            <textarea id="info-importante" name="info_importante" class="form-control" rows="3" placeholder="Ej.: vigencia, condiciones, plazos de pago, contacto"></textarea>
-                                        </div>
-                                        <div class="col-12">
-                                            <button type="submit" class="btn btn-primary w-100" <?php echo empty($clientes) || empty($servicios) ? 'disabled' : ''; ?>>
-                                                Dar de alta y enviar correo
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <form method="get" class="row g-2 align-items-end">
+                        <div class="col-md-6">
+                            <label class="form-label">Filtrar por cliente</label>
+                            <select name="cliente_id" class="form-select">
+                                <option value="0">Todos los clientes</option>
+                                <?php foreach ($clientes as $cliente) : ?>
+                                    <option value="<?php echo (int) $cliente['id']; ?>" <?php echo $clienteFiltroId === (int) $cliente['id'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars(($cliente['codigo'] ?? '') . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
-                    </div>
+                        <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Aplicar</button></div>
+                    </form>
                 </div>
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header d-flex align-items-center justify-content-between gap-2">
-                                <div>
-                                    <h5 class="card-title mb-0">Altas registradas</h5>
-                                    <p class="text-muted mb-0">Historial de servicios dados de alta por cliente.</p>
-                                </div>
-                                <span class="badge text-bg-primary"><?php echo count($asignaciones); ?> altas</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-striped table-centered mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Cliente</th>
-                                                <th>Servicio</th>
-                                                <th>Monto</th>
-                                                <th>Motivo</th>
-                                                <th>Información importante</th>
-                                                <th>Correo enviado</th>
-                                                <th>Creación</th>
-                                                <th class="text-end">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php if (empty($asignaciones)) : ?>
-                                                <tr>
-                                                    <td colspan="8" class="text-center text-muted">No hay altas registradas.</td>
-                                                </tr>
-                                            <?php else : ?>
-                                                <?php foreach ($asignaciones as $asignacion) : ?>
-                                                    <tr>
-                                                        <td><?php echo htmlspecialchars(($asignacion['cliente_codigo'] ?? '') . ' - ' . $asignacion['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td><?php echo htmlspecialchars($asignacion['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td>$<?php echo number_format((float) $asignacion['monto'], 2, ',', '.'); ?></td>
-                                                        <td><?php echo nl2br(htmlspecialchars((string) ($asignacion['motivo'] ?? '-'), ENT_QUOTES, 'UTF-8')); ?></td>
-                                                        <td><?php echo nl2br(htmlspecialchars((string) ($asignacion['info_importante'] ?? '-'), ENT_QUOTES, 'UTF-8')); ?></td>
-                                                        <td><?php echo !empty($asignacion['correo_enviado_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime((string) $asignacion['correo_enviado_at'])), ENT_QUOTES, 'UTF-8') : 'Pendiente'; ?></td>
-                                                        <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($asignacion['created_at'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td class="text-end">
-                                                            <form method="post" class="d-inline" data-confirm="¿Eliminar el alta?">
-                                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                                                                <input type="hidden" name="action" value="delete">
-                                                                <input type="hidden" name="id" value="<?php echo (int) $asignacion['id']; ?>">
-                                                                <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
-                                                            </form>
-                                                        </td>
-                                                    </tr>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
-            <?php include('partials/footer.php'); ?>
+            <div class="card mb-3">
+                <div class="card-header"><h5 class="mb-0">Servicios asociados no pagados</h5></div>
+                <div class="card-body table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Cobro</th><th>Monto</th><th>Motivo suspensión</th><th>Detalle</th><th>Acción</th></tr></thead>
+                        <tbody>
+                        <?php if (empty($serviciosPendientes)) : ?>
+                            <tr><td colspan="7" class="text-center text-muted">No hay servicios asociados con cobros pendientes.</td></tr>
+                        <?php else : foreach ($serviciosPendientes as $row) : ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars(($row['cliente_codigo'] ?? '') . ' - ' . $row['cliente'], ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo htmlspecialchars($row['cliente_correo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small></td>
+                                <td><?php echo htmlspecialchars($row['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td>#<?php echo (int) $row['cobro_id']; ?><br><small><?php echo htmlspecialchars((string) ($row['estado'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small></td>
+                                <td>$<?php echo number_format((float) $row['monto'], 2, ',', '.'); ?></td>
+                                <td colspan="3">
+                                    <form method="post" class="row g-2">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="suspender">
+                                        <input type="hidden" name="cliente_servicio_id" value="<?php echo (int) $row['cliente_servicio_id']; ?>">
+                                        <input type="hidden" name="cobro_id" value="<?php echo (int) $row['cobro_id']; ?>">
+                                        <input type="hidden" name="cliente_id" value="<?php echo (int) $row['cliente_id']; ?>">
+                                        <div class="col-md-5"><input type="text" name="motivo" class="form-control form-control-sm" placeholder="Motivo (obligatorio)" required></div>
+                                        <div class="col-md-5"><input type="text" name="detalle" class="form-control form-control-sm" placeholder="Detalle importante (web/correo sin servicio)"></div>
+                                        <div class="col-md-2"><button class="btn btn-danger btn-sm w-100" type="submit">Suspender</button></div>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Registro de suspensiones</h5></div>
+                <div class="card-body table-responsive">
+                    <table class="table table-striped mb-0">
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Motivo</th><th>Detalle</th><th>Correo</th><th>Fecha</th></tr></thead>
+                        <tbody>
+                        <?php if (empty($suspensiones)) : ?>
+                            <tr><td colspan="6" class="text-center text-muted">Sin registros de suspensión.</td></tr>
+                        <?php else : foreach ($suspensiones as $suspension) : ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars(($suspension['cliente_codigo'] ?? '') . ' - ' . $suspension['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars($suspension['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo nl2br(htmlspecialchars((string) $suspension['motivo'], ENT_QUOTES, 'UTF-8')); ?></td>
+                                <td><?php echo nl2br(htmlspecialchars((string) ($suspension['detalle'] ?? '-'), ENT_QUOTES, 'UTF-8')); ?></td>
+                                <td><?php echo htmlspecialchars((string) ($suspension['correo_destinatario'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo !empty($suspension['correo_enviado_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime((string) $suspension['correo_enviado_at'])), ENT_QUOTES, 'UTF-8') : 'No enviado'; ?></small></td>
+                                <td><?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string) $suspension['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
         </div>
-
+        <?php include('partials/footer.php'); ?>
     </div>
-
-    <?php include('partials/customizer.php'); ?>
-
-    <?php include('partials/footer-scripts.php'); ?>
-
+</div>
+<?php include('partials/customizer.php'); ?>
+<?php include('partials/footer-scripts.php'); ?>
 </body>
-
 </html>

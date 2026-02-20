@@ -130,7 +130,7 @@
                             <a href="clientes-crear.php" class="side-nav-link">Crear cliente</a>
                         </li>
                             <li class="side-nav-item">
-                                <a href="clientes-servicios.php" class="side-nav-link">Alta de servicios</a>
+                                <a href="clientes-servicios.php" class="side-nav-link">Suspender servicios</a>
                             </li>
                     </ul>
                 </div>
@@ -199,6 +199,9 @@
                             </li>
                             <li class="side-nav-item">
                                 <a href="configuracion-avisos.php" class="side-nav-link">Plantillas de avisos</a>
+                            </li>
+                            <li class="side-nav-item">
+                                <a href="configuracion-suspension-correo.php" class="side-nav-link">Correo suspensión servicios</a>
                             </li>
                         </ul>
                     </div>
