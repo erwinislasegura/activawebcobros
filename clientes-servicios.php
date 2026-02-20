@@ -15,18 +15,39 @@ function render_html_template(string $template, array $data): string
 
 function enviar_correo_suspension(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
 {
-    if ($destinatario === '' || $fromEmail === '') {
+    $destinatario = trim($destinatario);
+    $fromEmail = trim($fromEmail);
+    $fromName = trim($fromName);
+
+    if ($destinatario === '' || $fromEmail === '' || !filter_var($destinatario, FILTER_VALIDATE_EMAIL) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
+
+    $asunto = trim(str_replace(["\r", "\n"], ' ', $asunto));
+    $asuntoEncoded = '=?UTF-8?B?' . base64_encode($asunto !== '' ? $asunto : 'Aviso de suspensión de servicio') . '?=';
+
+    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
 
     $headers = [
         'MIME-Version: 1.0',
         'Content-type: text/html; charset=UTF-8',
-        'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
+        'From: ' . $displayName . ' <' . $fromEmail . '>',
+        'Reply-To: ' . $fromEmail,
+        'Return-Path: ' . $fromEmail,
+        'X-Mailer: PHP/' . phpversion(),
     ];
 
-    return @mail($destinatario, $asunto, $cuerpoHtml, implode("\r\n", $headers));
+    $headersString = implode("\r\n", $headers);
+    $extraParams = '-f ' . escapeshellarg($fromEmail);
+
+    $enviado = @mail($destinatario, $asuntoEncoded, $cuerpoHtml, $headersString, $extraParams);
+    if (!$enviado) {
+        $enviado = @mail($destinatario, $asuntoEncoded, $cuerpoHtml, $headersString);
+    }
+
+    return $enviado;
 }
+
 
 $defaultSubject = 'URGENTE: Suspensión de servicio {{servicio_nombre}}';
 $defaultBody = <<<'HTML'
@@ -55,21 +76,6 @@ $defaultBody = <<<'HTML'
 </body>
 </html>
 HTML;
-
-function enviar_correo_alta_servicio(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
-{
-    if ($destinatario === '' || $fromEmail === '') {
-        return false;
-    }
-
-    $headers = [
-        'MIME-Version: 1.0',
-        'Content-type: text/html; charset=UTF-8',
-        'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
-    ];
-
-    return @mail($destinatario, $asunto, $cuerpoHtml, implode("\r\n", $headers));
-}
 
 try {
     db()->exec(
@@ -132,9 +138,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
     }
     if ($motivo === '') {
         $errors[] = 'Debes indicar el motivo de suspensión.';
-    }
-    if ($motivo === '') {
-        $errors[] = 'Debes indicar el motivo del alta del servicio.';
     }
 
     if (empty($errors)) {
@@ -205,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                 $enviado = enviar_correo_suspension((string) $detalleServicio['cliente_correo'], $subject, $bodyHtml, $fromEmail, $fromName);
                 if (!$enviado) {
                     db()->rollBack();
-                    $errorMessage = 'No se pudo enviar el correo urgente de suspensión.';
+                    $errorMessage = 'No se pudo enviar el correo urgente de suspensión. Revisa correo remitente, destinatario y configuración del servidor de correo.';
                 } else {
                     $nuevoId = (int) db()->lastInsertId();
                     $stmtUpdate = db()->prepare('UPDATE clientes_servicios_suspensiones SET correo_enviado_at = NOW() WHERE id = ?');
