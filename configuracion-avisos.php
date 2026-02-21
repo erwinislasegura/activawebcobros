@@ -128,56 +128,63 @@ $bodyPreview = strtr($template['body_html'], $previewData);
                     </div>
                 <?php endif; ?>
 
-                <div class="card">
-                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-                        <div>
-                            <h5 class="card-title mb-0">Plantillas de avisos</h5>
-                            <p class="text-muted mb-0">Configura el diseño y texto de los avisos 1, 2 y 3.</p>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <form method="get" class="d-flex align-items-center gap-2">
-                                <label class="form-label mb-0" for="template-key">Aviso</label>
-                                <select id="template-key" name="template" class="form-select form-select-sm" onchange="this.form.submit()">
-                                    <?php foreach ($templateOptions as $key => $info) : ?>
-                                        <option value="<?php echo htmlspecialchars($key, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $key === $templateKey ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($info['label'], ENT_QUOTES, 'UTF-8'); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </form>
+                <div class="row">
+                    <div class="col-lg-7">
+                        <div class="card">
+                            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                <div>
+                                    <h5 class="card-title mb-0">Plantillas de avisos</h5>
+                                    <p class="text-muted mb-0">Configura el diseño y texto de los avisos 1, 2 y 3.</p>
+                                </div>
+                                <form method="get" class="d-flex align-items-center gap-2">
+                                    <label class="form-label mb-0" for="template-key">Aviso</label>
+                                    <select id="template-key" name="template" class="form-select form-select-sm" onchange="this.form.submit()">
+                                        <?php foreach ($templateOptions as $key => $info) : ?>
+                                            <option value="<?php echo htmlspecialchars($key, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $key === $templateKey ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($info['label'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </form>
+                            </div>
+                            <div class="card-body">
+                                <form id="template-form" method="post">
+                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="template_key" value="<?php echo htmlspecialchars($templateKey, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="subject">Asunto</label>
+                                        <input type="text" id="subject" name="subject" class="form-control" value="<?php echo htmlspecialchars($template['subject'] ?? $defaultSubject, ENT_QUOTES, 'UTF-8'); ?>">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label" for="body-html">Cuerpo (HTML)</label>
+                                        <textarea id="body-html" name="body_html" class="form-control code-editor" rows="14"><?php echo htmlspecialchars($template['body_html'] ?? $defaultBody, ENT_QUOTES, 'UTF-8'); ?></textarea>
+                                    </div>
+                                </form>
+                                <form id="restore-template-form" method="post">
+                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="template_key" value="<?php echo htmlspecialchars($templateKey, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="action" value="restore">
+                                </form>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="submit" form="restore-template-form" class="btn btn-outline-secondary">Restaurar plantilla</button>
+                                    <button type="submit" form="template-form" class="btn btn-primary">Guardar plantilla</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <form id="template-form" method="post">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                            <input type="hidden" name="template_key" value="<?php echo htmlspecialchars($templateKey, ENT_QUOTES, 'UTF-8'); ?>">
-                            <div class="mb-3">
-                                <label class="form-label" for="subject">Asunto</label>
-                                <input type="text" id="subject" name="subject" class="form-control" value="<?php echo htmlspecialchars($template['subject'] ?? $defaultSubject, ENT_QUOTES, 'UTF-8'); ?>">
+
+                    <div class="col-lg-5">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Vista previa</h5>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label" for="body-html">Cuerpo (HTML)</label>
-                                <textarea id="body-html" name="body_html" class="form-control code-editor" rows="14"><?php echo htmlspecialchars($template['body_html'] ?? $defaultBody, ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            <div class="card-body">
+                                <div class="mb-2"><strong>Asunto:</strong> <?php echo htmlspecialchars($subjectPreview, ENT_QUOTES, 'UTF-8'); ?></div>
+                                <iframe title="Vista previa" style="width:100%;height:560px;border:1px solid #dee2e6;border-radius:8px;background:#fff;" srcdoc="<?php echo htmlspecialchars($bodyPreview, ENT_QUOTES, 'UTF-8'); ?>"></iframe>
                             </div>
-                        </form>
-                        <form id="restore-template-form" method="post">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                            <input type="hidden" name="template_key" value="<?php echo htmlspecialchars($templateKey, ENT_QUOTES, 'UTF-8'); ?>">
-                            <input type="hidden" name="action" value="restore">
-                        </form>
-                        <div class="d-flex flex-wrap gap-2">
-                            <button type="submit" form="restore-template-form" class="btn btn-outline-secondary">Restaurar plantilla</button>
-                            <button type="submit" form="template-form" class="btn btn-primary">Guardar plantilla</button>
-                        </div>
-                        <hr>
-                        <h6 class="mb-3">Vista previa</h6>
-                        <div class="border rounded bg-white p-3">
-                            <div class="mb-2 text-muted small">Asunto: <?php echo htmlspecialchars($subjectPreview, ENT_QUOTES, 'UTF-8'); ?></div>
-                            <div><?php echo $bodyPreview; ?></div>
                         </div>
                     </div>
                 </div>
-
             </div>
 
             <?php include('partials/footer.php'); ?>

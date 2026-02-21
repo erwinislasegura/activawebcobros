@@ -13,6 +13,55 @@ function render_html_template(string $template, array $data): string
     return strtr($template, $data);
 }
 
+function append_suspension_payment_button(string $bodyHtml, string $link): string
+{
+    if ($link === '') {
+        return $bodyHtml;
+    }
+
+    if (str_contains($bodyHtml, $link) || str_contains($bodyHtml, '{{link_boton_pago}}') || str_contains($bodyHtml, 'Pagar ahora')) {
+        return $bodyHtml;
+    }
+
+    $safeLink = htmlspecialchars($link, ENT_QUOTES, 'UTF-8');
+    $buttonHtml = <<<HTML
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;">
+  <tr>
+    <td>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
+        <tr>
+          <td style="padding:14px;">
+            <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:6px;">Paga aquí!</div>
+            <a href="{$safeLink}" style="background:#16A34A;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:block;width:100%;box-sizing:border-box;font-size:13px;font-weight:600;text-align:center;">
+              Pagar ahora
+            </a>
+            <div style="padding-top:8px;font-size:12px;color:#6B7280;line-height:1.5;">
+              Pago seguro y protegido: este enlace pertenece al sistema oficial de cobros y protege sus datos con cifrado. Si tiene dudas, puede responder este correo para validar el pago antes de realizarlo.
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+HTML;
+
+    if (str_contains($bodyHtml, '<p>Atentamente,')) {
+        return str_replace('<p>Atentamente,', $buttonHtml . "\n<p>Atentamente,", $bodyHtml);
+    }
+
+    if (str_contains($bodyHtml, '</body>')) {
+        return str_replace('</body>', $buttonHtml . "\n</body>", $bodyHtml);
+    }
+
+    $closingCellPattern = '/<\/td>\s*<\/tr>\s*<\/table>/i';
+    if (preg_match($closingCellPattern, $bodyHtml) === 1) {
+        return preg_replace($closingCellPattern, "\n{$buttonHtml}\n</td></tr></table>", $bodyHtml, 1);
+    }
+
+    return $bodyHtml . "\n" . $buttonHtml;
+}
+
 function enviar_correo_suspension(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
 {
     $destinatario = trim($destinatario);
@@ -28,13 +77,19 @@ function enviar_correo_suspension(string $destinatario, string $asunto, string $
 
     $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
 
+    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
+
     $headers = [
         'MIME-Version: 1.0',
         'Content-type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+        'Date: ' . date(DATE_RFC2822),
+        'Message-ID: ' . $messageId,
         'From: ' . $displayName . ' <' . $fromEmail . '>',
         'Reply-To: ' . $fromEmail,
         'Return-Path: ' . $fromEmail,
         'X-Mailer: PHP/' . phpversion(),
+        'X-Auto-Response-Suppress: OOF, AutoReply',
     ];
 
     $headersString = implode("\r\n", $headers);
@@ -49,27 +104,27 @@ function enviar_correo_suspension(string $destinatario, string $asunto, string $
 }
 
 
-$defaultSubject = 'URGENTE: Suspensión de servicio {{servicio_nombre}}';
+$defaultSubject = 'Regularización de {{servicio_nombre}} para continuidad operativa';
 $defaultBody = <<<'HTML'
 <!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Suspensión de servicio</title></head>
-<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,Helvetica,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f6fb"><tr><td align="center" style="padding:24px 12px;">
-<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e6ebf2;">
-<tr><td style="padding:14px 18px;background:#9f1239;color:#fff;font-weight:700;">{{municipalidad_nombre}} · Notificación urgente</td></tr>
-<tr><td style="height:4px;background:#ef4444;line-height:4px;font-size:0;">&nbsp;</td></tr>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f8fafc"><tr><td align="center" style="padding:24px 12px;">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
+<tr><td style="padding:0;background:#DC2626;"><table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:16px 20px;color:#fff;font-weight:700;">{{municipalidad_nombre}}</td><td align="right" style="padding:16px 20px;color:#fee2e2;font-size:12px;white-space:nowrap;">Suspensión urgente</td></tr></table></td></tr>
+<tr><td style="height:4px;background:#FCA5A5;line-height:4px;font-size:0;">&nbsp;</td></tr>
 <tr><td style="padding:24px;color:#1f2937;font-size:14px;line-height:1.65;">
-<p>Estimado/a <strong>{{cliente_nombre}}</strong>,</p>
-<p>Le informamos con carácter de <strong style="color:#b91c1c;">URGENTE</strong> que su servicio <strong>{{servicio_nombre}}</strong> ha sido suspendido por deuda pendiente.</p>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0;background:#fff5f5;border:1px solid #fecaca;border-radius:10px;"><tr><td style="padding:12px;">
-<div><strong>Motivo:</strong> {{motivo_suspension}}</div>
-<div><strong>Detalle importante:</strong> {{detalle_suspension}}</div>
+<p style="margin:0 0 12px 0;">Estimado/a <strong>{{cliente_nombre}}</strong>,</p>
+<p style="margin:0 0 14px 0;color:#374151;">Le informamos la <strong style="color:#b91c1c;">suspensión inmediata</strong> del servicio <strong>{{servicio_nombre}}</strong> debido a pago pendiente.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 18px 0;background:#fff5f5;border:1px solid #fecaca;border-radius:12px;"><tr><td style="padding:14px;">
+<div style="margin-bottom:6px;"><strong>Motivo:</strong> {{motivo_suspension}}</div>
+<div style="margin-bottom:6px;"><strong>Detalle:</strong> {{detalle_suspension}}</div>
 <div><strong>Monto pendiente:</strong> {{monto_pendiente}}</div>
 </td></tr></table>
-<p style="margin:0 0 8px 0;">Esta suspensión implica que sus <strong>sitios web y correos asociados pueden quedar sin funcionamiento</strong>, lo que puede causar <strong>pérdida de seriedad y posicionamiento en internet</strong>.</p>
-<p>Regularice su pago a la brevedad para reactivar el servicio.</p>
-<p>Atentamente,<br><strong>{{municipalidad_nombre}}</strong></p>
+<p style="margin:0 0 12px 0;color:#4B5563;">Queremos ayudarle a restablecer su operación cuanto antes. Mantener este saldo pendiente puede provocar interrupciones en su sitio web, correos corporativos y canales de contacto con clientes, afectando su continuidad comercial, confianza de usuarios y posicionamiento digital.</p>
+<p style="margin:0 0 12px 0;color:#4B5563;">Para evitar pérdidas de visibilidad y mantener sus servicios activos, le recomendamos regularizar hoy mismo mediante el botón de pago seguro incluido en este correo. Una vez acreditado el pago, su caso podrá ser priorizado para reactivación en el menor tiempo posible.</p>
+<p>Atentamente,<br><strong>Departamento de Soporte y Servicios Digitales</strong><br>{{municipalidad_nombre}}</p>
 </td></tr>
 </table>
 </td></tr></table>
@@ -126,6 +181,29 @@ try {
     $errorMessage = 'No se pudo preparar el módulo de suspensión de servicios.';
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_suspension' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $suspensionId = (int) ($_POST['suspension_id'] ?? 0);
+    $clienteFiltroId = (int) ($_POST['cliente_id'] ?? 0);
+
+    if ($suspensionId <= 0) {
+        $errorMessage = 'No se pudo identificar el registro de suspensión a eliminar.';
+    } else {
+        try {
+            $stmtDelete = db()->prepare('DELETE FROM clientes_servicios_suspensiones WHERE id = ?');
+            $stmtDelete->execute([$suspensionId]);
+            $redirectUrl = 'clientes-servicios.php?deleted=1';
+            if ($clienteFiltroId > 0) {
+                $redirectUrl .= '&cliente_id=' . $clienteFiltroId;
+            }
+            redirect($redirectUrl);
+        } catch (Exception $e) {
+            $errorMessage = 'No se pudo eliminar el registro de suspensión.';
+        } catch (Error $e) {
+            $errorMessage = 'No se pudo eliminar el registro de suspensión.';
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspender' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $clienteServicioId = (int) ($_POST['cliente_servicio_id'] ?? 0);
     $cobroId = (int) ($_POST['cobro_id'] ?? 0);
@@ -156,6 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                         c.nombre AS cliente_nombre,
                         c.correo AS cliente_correo,
                         s.nombre AS servicio_nombre,
+                        s.link_boton_pago,
                         COALESCE(cb.monto, s.monto) AS monto_pendiente,
                         cb.id AS cobro_id,
                         cb.estado AS cobro_estado
@@ -189,10 +268,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                     '{{motivo_suspension}}' => nl2br(htmlspecialchars($motivo, ENT_QUOTES, 'UTF-8')),
                     '{{detalle_suspension}}' => nl2br(htmlspecialchars($detalle !== '' ? $detalle : 'No informado.', ENT_QUOTES, 'UTF-8')),
                     '{{monto_pendiente}}' => '$' . number_format((float) ($detalleServicio['monto_pendiente'] ?? 0), 2, ',', '.'),
+                    '{{link_boton_pago}}' => htmlspecialchars((string) ($detalleServicio['link_boton_pago'] ?? ''), ENT_QUOTES, 'UTF-8'),
                 ];
 
                 $subject = render_html_template((string) $template['subject'], $data);
                 $bodyHtml = render_html_template((string) $template['body_html'], $data);
+                $bodyHtml = append_suspension_payment_button($bodyHtml, (string) ($detalleServicio['link_boton_pago'] ?? ''));
 
                 db()->beginTransaction();
                 $stmtInsert = db()->prepare('INSERT INTO clientes_servicios_suspensiones (cliente_servicio_id, cobro_id, motivo, detalle, correo_destinatario, created_by) VALUES (?, ?, ?, ?, ?, ?)');
@@ -214,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                     $stmtUpdate = db()->prepare('UPDATE clientes_servicios_suspensiones SET correo_enviado_at = NOW() WHERE id = ?');
                     $stmtUpdate->execute([$nuevoId]);
                     db()->commit();
-                    redirect('clientes-servicios.php?success=1&cliente_id=' . (int) $detalleServicio['cliente_id']);
+                    redirect('clientes-servicios.php?success=1');
                 }
             }
         } catch (Exception $e) {
@@ -252,7 +333,9 @@ try {
                       JOIN clientes c ON c.id = cs.cliente_id
                       JOIN servicios s ON s.id = cs.servicio_id
                       JOIN cobros_servicios cb ON cb.cliente_id = cs.cliente_id AND cb.servicio_id = cs.servicio_id
-                      WHERE LOWER(TRIM(cb.estado)) <> "pagado"';
+                      LEFT JOIN clientes_servicios_suspensiones ss ON ss.cliente_servicio_id = cs.id AND (ss.cobro_id = cb.id OR ss.cobro_id IS NULL)
+                      WHERE LOWER(TRIM(cb.estado)) <> "pagado"
+                        AND ss.id IS NULL';
 
     if ($clienteFiltroId > 0) {
         $sqlPendientes .= ' AND c.id = ' . (int) $clienteFiltroId;
@@ -298,6 +381,7 @@ try {
             <?php $subtitle = "Clientes"; $title = "Suspender servicios"; include('partials/page-title.php'); ?>
 
             <?php if ($success === '1') : ?><div class="alert alert-success">Servicio suspendido y notificación urgente enviada.</div><?php endif; ?>
+            <?php if (($_GET['deleted'] ?? '') === '1') : ?><div class="alert alert-success">Registro de suspensión eliminado correctamente.</div><?php endif; ?>
             <?php if ($errorMessage !== '') : ?><div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
 
             <div class="card mb-3">
@@ -334,14 +418,22 @@ try {
                                 <td>#<?php echo (int) $row['cobro_id']; ?><br><small><?php echo htmlspecialchars((string) ($row['estado'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small></td>
                                 <td>$<?php echo number_format((float) $row['monto'], 2, ',', '.'); ?></td>
                                 <td colspan="3">
-                                    <form method="post" class="row g-2">
+                                    <form method="post" class="row g-2 js-suspension-form">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                         <input type="hidden" name="action" value="suspender">
                                         <input type="hidden" name="cliente_servicio_id" value="<?php echo (int) $row['cliente_servicio_id']; ?>">
                                         <input type="hidden" name="cobro_id" value="<?php echo (int) $row['cobro_id']; ?>">
                                         <input type="hidden" name="cliente_id" value="<?php echo (int) $row['cliente_id']; ?>">
-                                        <div class="col-md-5"><input type="text" name="motivo" class="form-control form-control-sm" placeholder="Motivo (obligatorio)" required></div>
-                                        <div class="col-md-5"><input type="text" name="detalle" class="form-control form-control-sm" placeholder="Detalle importante (web/correo sin servicio)"></div>
+                                        <div class="col-md-3">
+                                            <select class="form-select form-select-sm js-plantilla-suspension" aria-label="Plantillas de suspensión">
+                                                <option value="">Plantilla rápida</option>
+                                                <option value="mora" data-motivo="Facturas vencidas sin regularización." data-detalle="Suspensión preventiva por mora. Sitio y correo podrían quedar fuera de servicio hasta acreditar pago.">Mora</option>
+                                                <option value="recordatorio" data-motivo="No pago luego de avisos previos." data-detalle="Sin regularización tras múltiples avisos. Se recomienda pago inmediato para evitar pérdida de continuidad digital.">Sin respuesta</option>
+                                                <option value="reactivacion" data-motivo="Pendiente para reactivación." data-detalle="Regularizando hoy se gestiona reactivación prioritaria de servicios y correo corporativo.">Reactivación</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4"><input type="text" name="motivo" class="form-control form-control-sm js-motivo" placeholder="Motivo (obligatorio)" required></div>
+                                        <div class="col-md-3"><input type="text" name="detalle" class="form-control form-control-sm js-detalle" placeholder="Detalle importante (web/correo sin servicio)"></div>
                                         <div class="col-md-2"><button class="btn btn-danger btn-sm w-100" type="submit">Suspender</button></div>
                                     </form>
                                 </td>
@@ -356,10 +448,10 @@ try {
                 <div class="card-header"><h5 class="mb-0">Registro de suspensiones</h5></div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
-                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Motivo</th><th>Detalle</th><th>Correo</th><th>Fecha</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Motivo</th><th>Detalle</th><th>Correo</th><th>Fecha</th><th>Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($suspensiones)) : ?>
-                            <tr><td colspan="6" class="text-center text-muted">Sin registros de suspensión.</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted">Sin registros de suspensión.</td></tr>
                         <?php else : foreach ($suspensiones as $suspension) : ?>
                             <tr>
                                 <td><?php echo htmlspecialchars(($suspension['cliente_codigo'] ?? '') . ' - ' . $suspension['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
@@ -368,6 +460,15 @@ try {
                                 <td><?php echo nl2br(htmlspecialchars((string) ($suspension['detalle'] ?? '-'), ENT_QUOTES, 'UTF-8')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($suspension['correo_destinatario'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo !empty($suspension['correo_enviado_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime((string) $suspension['correo_enviado_at'])), ENT_QUOTES, 'UTF-8') : 'No enviado'; ?></small></td>
                                 <td><?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string) $suspension['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td>
+                                    <form method="post" onsubmit="return confirm('¿Eliminar este registro de suspensión?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                        <input type="hidden" name="action" value="delete_suspension">
+                                        <input type="hidden" name="suspension_id" value="<?php echo (int) $suspension['id']; ?>">
+                                        <input type="hidden" name="cliente_id" value="<?php echo (int) $clienteFiltroId; ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                                    </form>
+                                </td>
                             </tr>
                         <?php endforeach; endif; ?>
                         </tbody>
@@ -381,5 +482,23 @@ try {
 </div>
 <?php include('partials/customizer.php'); ?>
 <?php include('partials/footer-scripts.php'); ?>
+<script>
+document.querySelectorAll('.js-suspension-form').forEach((form) => {
+    const selector = form.querySelector('.js-plantilla-suspension');
+    const motivo = form.querySelector('.js-motivo');
+    const detalle = form.querySelector('.js-detalle');
+
+    if (!selector || !motivo || !detalle) return;
+
+    selector.addEventListener('change', () => {
+        const option = selector.options[selector.selectedIndex];
+        const motivoText = option.getAttribute('data-motivo') || '';
+        const detalleText = option.getAttribute('data-detalle') || '';
+
+        if (motivoText !== '') motivo.value = motivoText;
+        if (detalleText !== '') detalle.value = detalleText;
+    });
+});
+</script>
 </body>
 </html>
