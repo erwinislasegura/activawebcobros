@@ -295,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                     $stmtUpdate = db()->prepare('UPDATE clientes_servicios_suspensiones SET correo_enviado_at = NOW() WHERE id = ?');
                     $stmtUpdate->execute([$nuevoId]);
                     db()->commit();
-                    redirect('clientes-servicios.php?success=1&cliente_id=' . (int) $detalleServicio['cliente_id']);
+                    redirect('clientes-servicios.php?success=1');
                 }
             }
         } catch (Exception $e) {
