@@ -36,6 +36,19 @@ function ensure_column(string $table, string $column, string $definition): void
     }
 }
 
+function table_exists(string $table): bool
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return false;
+    }
+
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?');
+    $stmt->execute([$dbName, $table]);
+
+    return (int) $stmt->fetchColumn() > 0;
+}
+
 try {
     ensure_column('cobros_servicios', 'aviso_1_enviado_at', 'DATETIME NULL');
     ensure_column('cobros_servicios', 'aviso_2_enviado_at', 'DATETIME NULL');
@@ -304,6 +317,18 @@ try {
         }
     }
 
+    $excludeSuspendedCondition = '';
+    if (table_exists('clientes_servicios') && table_exists('clientes_servicios_suspensiones')) {
+        $excludeSuspendedCondition = ' AND NOT EXISTS (
+                SELECT 1
+                FROM clientes_servicios csx
+                JOIN clientes_servicios_suspensiones ss ON ss.cliente_servicio_id = csx.id
+                WHERE csx.cliente_id = cs.cliente_id
+                  AND csx.servicio_id = cs.servicio_id
+                  AND (ss.cobro_id = cs.id OR ss.cobro_id IS NULL)
+         )';
+    }
+
     $cobros = db()->query(
         'SELECT cs.id,
                 COALESCE(c.nombre, cs.cliente) AS cliente,
@@ -323,7 +348,7 @@ try {
          FROM cobros_servicios cs
          LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
-         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
+         WHERE LOWER(TRIM(cs.estado)) <> "pagado"' . $excludeSuspendedCondition . '
          ORDER BY cs.id DESC'
     )->fetchAll();
 } catch (Exception $e) {
