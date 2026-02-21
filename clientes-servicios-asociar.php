@@ -82,7 +82,18 @@ $servicios = [];
 $asociaciones = [];
 try {
     $clientes = db()->query('SELECT id, codigo, nombre FROM clientes WHERE estado = 1 ORDER BY nombre')->fetchAll();
-    $servicios = db()->query('SELECT id, nombre, estado FROM servicios ORDER BY nombre')->fetchAll();
+    $servicios = db()->query(
+        'SELECT s.id,
+                s.nombre,
+                s.descripcion,
+                s.monto,
+                s.link_boton_pago,
+                s.estado,
+                ts.nombre AS tipo_servicio
+         FROM servicios s
+         LEFT JOIN tipos_servicios ts ON ts.id = s.tipo_servicio_id
+         ORDER BY s.nombre'
+    )->fetchAll();
     $asociaciones = db()->query(
         'SELECT cs.id,
                 c.codigo AS cliente_codigo,
@@ -140,12 +151,33 @@ try {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Servicio</label>
-                            <select name="servicio_id" class="form-select" required>
+                            <select id="servicio-id" name="servicio_id" class="form-select" required>
                                 <option value="">Selecciona un servicio</option>
                                 <?php foreach ($servicios as $servicio) : ?>
-                                    <option value="<?php echo (int) $servicio['id']; ?>"><?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <option
+                                        value="<?php echo (int) $servicio['id']; ?>"
+                                        data-nombre="<?php echo htmlspecialchars((string) ($servicio['nombre'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-tipo="<?php echo htmlspecialchars((string) ($servicio['tipo_servicio'] ?? 'Sin tipo'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-monto="<?php echo htmlspecialchars('$' . number_format((float) ($servicio['monto'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-estado="<?php echo (int) ($servicio['estado'] ?? 0) === 1 ? 'Activo' : 'Inactivo'; ?>"
+                                        data-descripcion="<?php echo htmlspecialchars((string) ($servicio['descripcion'] ?? 'Sin descripción.'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-link="<?php echo htmlspecialchars((string) ($servicio['link_boton_pago'] ?? 'No configurado'), ENT_QUOTES, 'UTF-8'); ?>"
+                                    >
+                                        <?php echo htmlspecialchars((string) ($servicio['nombre'] ?? 'Servicio') . ' · $' . number_format((float) ($servicio['monto'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3 bg-light" id="servicio-detalle" style="display:none;">
+                                <h6 class="mb-2">Detalle del servicio seleccionado</h6>
+                                <div class="small text-muted mb-1"><strong>Nombre:</strong> <span id="detalle-nombre"></span></div>
+                                <div class="small text-muted mb-1"><strong>Tipo:</strong> <span id="detalle-tipo"></span></div>
+                                <div class="small text-muted mb-1"><strong>Monto:</strong> <span id="detalle-monto"></span></div>
+                                <div class="small text-muted mb-1"><strong>Estado:</strong> <span id="detalle-estado"></span></div>
+                                <div class="small text-muted mb-1"><strong>Descripción:</strong> <span id="detalle-descripcion"></span></div>
+                                <div class="small text-muted"><strong>Link pago:</strong> <span id="detalle-link"></span></div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <button type="submit" class="btn btn-primary">Guardar asociación</button>
@@ -191,5 +223,40 @@ try {
 </div>
 <?php include('partials/customizer.php'); ?>
 <?php include('partials/footer-scripts.php'); ?>
+<script>
+(function () {
+    const servicioSelect = document.getElementById('servicio-id');
+    const detalle = document.getElementById('servicio-detalle');
+    if (!servicioSelect || !detalle) return;
+
+    const campos = {
+        nombre: document.getElementById('detalle-nombre'),
+        tipo: document.getElementById('detalle-tipo'),
+        monto: document.getElementById('detalle-monto'),
+        estado: document.getElementById('detalle-estado'),
+        descripcion: document.getElementById('detalle-descripcion'),
+        link: document.getElementById('detalle-link')
+    };
+
+    function syncDetalle() {
+        const option = servicioSelect.options[servicioSelect.selectedIndex];
+        if (!option || !option.value) {
+            detalle.style.display = 'none';
+            return;
+        }
+
+        campos.nombre.textContent = option.dataset.nombre || '-';
+        campos.tipo.textContent = option.dataset.tipo || '-';
+        campos.monto.textContent = option.dataset.monto || '-';
+        campos.estado.textContent = option.dataset.estado || '-';
+        campos.descripcion.textContent = option.dataset.descripcion || '-';
+        campos.link.textContent = option.dataset.link || '-';
+        detalle.style.display = 'block';
+    }
+
+    servicioSelect.addEventListener('change', syncDetalle);
+    syncDetalle();
+})();
+</script>
 </body>
 </html>
