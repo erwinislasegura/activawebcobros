@@ -36,6 +36,12 @@ $defaultBody = <<<'HTML'
 <p><strong>Motivo:</strong> {{motivo_suspension}}<br><strong>Detalle:</strong> {{detalle_suspension}}<br><strong>Monto pendiente:</strong> {{monto_pendiente}}</p>
 <p>Esta situación puede dejar sin funcionamiento su <strong>sitio web y correos corporativos</strong>, afectando su continuidad operacional, su <strong>seriedad comercial</strong> y su <strong>posicionamiento en internet</strong>.</p>
 <p>Le solicitamos regularizar con urgencia.</p>
+<table cellpadding="0" cellspacing="0" style="margin:18px 0;"><tr><td>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:14px;">
+<div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:6px;">Paga aquí</div>
+<a href="{{link_boton_pago}}" style="background:#b91c1c;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:inline-block;font-size:13px;font-weight:600;min-width:240px;text-align:center;">Pagar ahora</a>
+</td></tr></table>
+</td></tr></table>
 <p>Atentamente,<br><strong>{{municipalidad_nombre}}</strong></p>
 </td></tr>
 </table>
@@ -85,6 +91,7 @@ $previewData = [
     '{{motivo_suspension}}' => 'Facturas con vencimiento mayor a 30 días.',
     '{{detalle_suspension}}' => 'Sin regularización en plazos informados por el equipo de cobranzas.',
     '{{monto_pendiente}}' => '$149.990',
+    '{{link_boton_pago}}' => 'https://pagos.ejemplo.cl/servicio/hosting-corporativo',
 ];
 $subjectPreview = $renderTemplate($template['subject'] ?? $defaultSubject, $previewData);
 $bodyPreview = $renderTemplate($template['body_html'] ?? $defaultBody, $previewData);
@@ -119,7 +126,7 @@ $bodyPreview = $renderTemplate($template['body_html'] ?? $defaultBody, $previewD
         <div class="mb-3"><label class="form-label">Asunto</label><input class="form-control" name="subject" value="<?php echo htmlspecialchars((string) ($template['subject'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"></div>
         <div class="mb-3"><label class="form-label">HTML</label><textarea class="form-control code-editor" rows="18" name="body_html"><?php echo htmlspecialchars((string) ($template['body_html'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea></div>
       </form>
-      <div class="alert alert-warning mb-0"><strong>Variables:</strong> {{municipalidad_nombre}}, {{cliente_nombre}}, {{servicio_nombre}}, {{motivo_suspension}}, {{detalle_suspension}}, {{monto_pendiente}}</div>
+      <div class="alert alert-warning mb-0"><strong>Variables:</strong> {{municipalidad_nombre}}, {{cliente_nombre}}, {{servicio_nombre}}, {{motivo_suspension}}, {{detalle_suspension}}, {{monto_pendiente}}, {{link_boton_pago}}</div>
     </div></div>
   </div>
   <div class="col-lg-5">
