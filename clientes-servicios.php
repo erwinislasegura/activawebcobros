@@ -43,8 +43,17 @@ function append_suspension_payment_button(string $bodyHtml, string $link): strin
 </table>
 HTML;
 
+    if (str_contains($bodyHtml, '<p>Atentamente,')) {
+        return str_replace('<p>Atentamente,', $buttonHtml . "\n<p>Atentamente,", $bodyHtml);
+    }
+
     if (str_contains($bodyHtml, '</body>')) {
         return str_replace('</body>', $buttonHtml . "\n</body>", $bodyHtml);
+    }
+
+    $closingCellPattern = '/<\/td>\s*<\/tr>\s*<\/table>/i';
+    if (preg_match($closingCellPattern, $bodyHtml) === 1) {
+        return preg_replace($closingCellPattern, "\n{$buttonHtml}\n</td></tr></table>", $bodyHtml, 1);
     }
 
     return $bodyHtml . "\n" . $buttonHtml;
