@@ -13,6 +13,32 @@ function render_html_template(string $template, array $data): string
     return strtr($template, $data);
 }
 
+function parse_recipient_emails(?string $raw): array
+{
+    $raw = trim((string) $raw);
+    if ($raw === '') {
+        return [];
+    }
+
+    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
+    $emails = [];
+    foreach ($parts as $email) {
+        $email = trim($email);
+        if ($email === '') {
+            continue;
+        }
+        $email = mb_strtolower($email, 'UTF-8');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+        if (!in_array($email, $emails, true)) {
+            $emails[] = $email;
+        }
+    }
+
+    return $emails;
+}
+
 function append_suspension_payment_button(string $bodyHtml, string $link): string
 {
     if ($link === '') {
@@ -248,10 +274,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
             $stmtDetalle->execute([$cobroId > 0 ? $cobroId : null, $clienteServicioId]);
             $detalleServicio = $stmtDetalle->fetch();
 
+            $recipientEmails = [];
+
+            if ($detalleServicio) {
+                $recipientEmails = parse_recipient_emails((string) ($detalleServicio['cliente_correo'] ?? ''));
+            }
+
             if (!$detalleServicio) {
                 $errorMessage = 'No se encontró el servicio para suspensión.';
-            } elseif (($detalleServicio['cliente_correo'] ?? '') === '') {
-                $errorMessage = 'El cliente no tiene correo configurado para notificación.';
+            } elseif (empty($recipientEmails)) {
+                $errorMessage = 'El cliente no tiene correos válidos configurados para notificación.';
             } elseif ($fromEmail === '') {
                 $errorMessage = 'Configura el correo remitente en Correo de envío antes de suspender.';
             } else {
@@ -286,7 +318,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
                     isset($_SESSION['user']['id']) ? (int) $_SESSION['user']['id'] : null,
                 ]);
 
-                $enviado = enviar_correo_suspension((string) $detalleServicio['cliente_correo'], $subject, $bodyHtml, $fromEmail, $fromName);
+                $enviado = true;
+                foreach ($recipientEmails as $recipientEmail) {
+                    if (!enviar_correo_suspension($recipientEmail, $subject, $bodyHtml, $fromEmail, $fromName)) {
+                        $enviado = false;
+                        break;
+                    }
+                }
+
                 if (!$enviado) {
                     db()->rollBack();
                     $errorMessage = 'No se pudo enviar el correo urgente de suspensión. Revisa correo remitente, destinatario y configuración del servidor de correo.';

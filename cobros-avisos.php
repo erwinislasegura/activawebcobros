@@ -59,6 +59,32 @@ function render_template(string $template, array $data): string
     return strtr($template, $data);
 }
 
+function parse_recipient_emails(?string $raw): array
+{
+    $raw = trim((string) $raw);
+    if ($raw === '') {
+        return [];
+    }
+
+    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
+    $emails = [];
+    foreach ($parts as $email) {
+        $email = trim($email);
+        if ($email === '') {
+            continue;
+        }
+        $email = mb_strtolower($email, 'UTF-8');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+        if (!in_array($email, $emails, true)) {
+            $emails[] = $email;
+        }
+    }
+
+    return $emails;
+}
+
 function append_payment_button(string $bodyHtml, string $link): string
 {
     if ($link === '') {
@@ -199,10 +225,12 @@ try {
             $stmtCobro->execute([$cobroId]);
             $cobro = $stmtCobro->fetch();
 
+            $recipientEmails = $cobro ? parse_recipient_emails((string) ($cobro['cliente_correo'] ?? '')) : [];
+
             if (!$cobro) {
                 $errorMessage = 'El cobro seleccionado no existe.';
-            } elseif (empty($cobro['cliente_correo'])) {
-                $errorMessage = 'El cliente no tiene correo configurado.';
+            } elseif (empty($recipientEmails)) {
+                $errorMessage = 'El cliente no tiene correos válidos configurados.';
             } else {
                 $fechaAviso = null;
                 $sentColumn = null;
@@ -250,7 +278,15 @@ try {
                         'X-Auto-Response-Suppress: OOF, AutoReply',
                     ];
 
-                    if (@mail($cobro['cliente_correo'], $subjectEncoded, $bodyHtml, implode("\r\n", $headers))) {
+                    $mailSent = true;
+                    foreach ($recipientEmails as $recipientEmail) {
+                        if (!@mail($recipientEmail, $subjectEncoded, $bodyHtml, implode("\r\n", $headers))) {
+                            $mailSent = false;
+                            break;
+                        }
+                    }
+
+                    if ($mailSent) {
                         if ($sentColumn !== null) {
                             $stmtUpdate = db()->prepare("UPDATE cobros_servicios SET {$sentColumn} = NOW() WHERE id = ?");
                             $stmtUpdate->execute([$cobroId]);
