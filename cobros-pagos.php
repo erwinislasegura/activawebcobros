@@ -125,20 +125,64 @@ try {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
-    $cobroId = (int) ($_POST['cobro_id'] ?? 0);
-    $fechaPago = trim($_POST['fecha_pago'] ?? '');
-    $metodo = trim($_POST['metodo'] ?? '');
-    $referenciaPago = trim($_POST['referencia_pago'] ?? '');
+    $action = trim((string) ($_POST['action'] ?? 'create_payment'));
 
-    if ($cobroId <= 0) {
-        $errors[] = 'Selecciona un cobro válido.';
-    }
-    if ($fechaPago === '') {
-        $errors[] = 'Selecciona la fecha de pago.';
-    }
+    if ($action === 'delete_payment') {
+        $paymentId = (int) ($_POST['payment_id'] ?? 0);
+        if ($paymentId <= 0) {
+            $errorMessage = 'No se pudo identificar el pago a eliminar.';
+        } else {
+            try {
+                $stmtPayment = db()->prepare('SELECT id, cobro_id FROM pagos_clientes WHERE id = ? LIMIT 1');
+                $stmtPayment->execute([$paymentId]);
+                $paymentRow = $stmtPayment->fetch();
 
-    if (empty($errors)) {
-        try {
+                if (!$paymentRow) {
+                    $errorMessage = 'El pago seleccionado no existe.';
+                } else {
+                    db()->beginTransaction();
+                    $stmtDelete = db()->prepare('DELETE FROM pagos_clientes WHERE id = ? LIMIT 1');
+                    $stmtDelete->execute([$paymentId]);
+
+                    $stmtCount = db()->prepare('SELECT COUNT(*) FROM pagos_clientes WHERE cobro_id = ?');
+                    $stmtCount->execute([(int) $paymentRow['cobro_id']]);
+                    $remainingPayments = (int) $stmtCount->fetchColumn();
+
+                    if ($remainingPayments === 0) {
+                        $stmtCobroUpdate = db()->prepare('UPDATE cobros_servicios SET estado = ? WHERE id = ?');
+                        $stmtCobroUpdate->execute(['Pendiente', (int) $paymentRow['cobro_id']]);
+                    }
+
+                    db()->commit();
+                    redirect('cobros-pagos.php?deleted=1');
+                }
+            } catch (Exception $e) {
+                if (db()->inTransaction()) {
+                    db()->rollBack();
+                }
+                $errorMessage = 'No se pudo eliminar el pago.';
+            } catch (Error $e) {
+                if (db()->inTransaction()) {
+                    db()->rollBack();
+                }
+                $errorMessage = 'No se pudo eliminar el pago.';
+            }
+        }
+    } else {
+        $cobroId = (int) ($_POST['cobro_id'] ?? 0);
+        $fechaPago = trim($_POST['fecha_pago'] ?? '');
+        $metodo = trim($_POST['metodo'] ?? '');
+        $referenciaPago = trim($_POST['referencia_pago'] ?? '');
+
+        if ($cobroId <= 0) {
+            $errors[] = 'Selecciona un cobro válido.';
+        }
+        if ($fechaPago === '') {
+            $errors[] = 'Selecciona la fecha de pago.';
+        }
+
+        if (empty($errors)) {
+            try {
             $stmtCobro = db()->prepare(
                 'SELECT cs.id,
                         cs.cliente_id,
@@ -228,10 +272,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
                 redirect('cobros-pagos.php?success=1&mail=' . ($mailSent ? '1' : '0'));
             }
-        } catch (Exception $e) {
-            $errorMessage = 'No se pudo registrar el pago.';
-        } catch (Error $e) {
-            $errorMessage = 'No se pudo registrar el pago.';
+            } catch (Exception $e) {
+                $errorMessage = 'No se pudo registrar el pago.';
+            } catch (Error $e) {
+                $errorMessage = 'No se pudo registrar el pago.';
+            }
         }
     }
 }
@@ -311,6 +356,10 @@ try {
                     <div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?></div>
                 <?php endif; ?>
 
+                <?php if (($_GET['deleted'] ?? '') === '1') : ?>
+                    <div class="alert alert-success">Pago eliminado correctamente.</div>
+                <?php endif; ?>
+
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
@@ -328,6 +377,7 @@ try {
                                 <?php endif; ?>
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="action" value="create_payment">
                                     <div class="row g-3">
                                         <div class="col-md-6">
                                             <label class="form-label" for="pago-cobro">Cobro pendiente</label>
@@ -415,12 +465,13 @@ try {
                                                 <th>Monto</th>
                                                 <th>Fecha pago</th>
                                                 <th>Método</th>
+                                                <th class="text-end">Acción</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <?php if (empty($pagos)) : ?>
                                                 <tr>
-                                                    <td colspan="6" class="text-center text-muted">No hay pagos registrados.</td>
+                                                    <td colspan="7" class="text-center text-muted">No hay pagos registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($pagos as $pago) : ?>
@@ -431,6 +482,14 @@ try {
                                                         <td>$<?php echo number_format((float) $pago['monto'], 2, ',', '.'); ?></td>
                                                         <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($pago['fecha_pago'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($pago['metodo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td class="text-end">
+                                                            <form method="post" class="d-inline" onsubmit="return confirm('¿Eliminar este pago registrado?');">
+                                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                                <input type="hidden" name="action" value="delete_payment">
+                                                                <input type="hidden" name="payment_id" value="<?php echo (int) $pago['id']; ?>">
+                                                                <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                                                            </form>
+                                                        </td>
                                                     </tr>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
