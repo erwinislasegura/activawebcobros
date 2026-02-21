@@ -20,7 +20,8 @@ $stats = [
     'overdue' => 0,
     'clients_with_pending' => 0,
     'due_next_7_days_amount' => 0.0,
-    'services_paid' => 0,
+    'services_paid_total' => 0,
+    'service_types_paid' => 0,
     'services_with_debt' => 0,
 ];
 $upcomingCollections = [];
@@ -34,23 +35,24 @@ $monthLabels = [];
 
 try {
     $stats['collections_total'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios')->fetchColumn();
-    $stats['collections_paid'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios WHERE LOWER(TRIM(estado)) = "pagado"')->fetchColumn();
-    $stats['collections_pending'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
-    $stats['pending_amount'] = (float) db()->query('SELECT COALESCE(SUM(monto), 0) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
+    $stats['collections_paid'] = (int) db()->query('SELECT COUNT(DISTINCT p.cobro_id) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id')->fetchColumn();
+    $stats['collections_pending'] = max(0, $stats['collections_total'] - $stats['collections_paid']);
+    $stats['pending_amount'] = (float) db()->query('SELECT COALESCE(SUM(cs.monto), 0) FROM cobros_servicios cs LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id WHERE p.id IS NULL')->fetchColumn();
     $stats['paid_amount'] = (float) db()->query('SELECT COALESCE(SUM(p.monto), 0) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id')->fetchColumn();
     $stats['paid_today_amount'] = (float) db()->query('SELECT COALESCE(SUM(p.monto), 0) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id WHERE DATE(p.fecha_pago) = CURDATE()')->fetchColumn();
     $stats['paid_month_amount'] = (float) db()->query('SELECT COALESCE(SUM(p.monto), 0) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id WHERE DATE_FORMAT(p.fecha_pago, "%Y-%m") = DATE_FORMAT(CURDATE(), "%Y-%m")')->fetchColumn();
-    $stats['due_today'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado" AND fecha_cobro = CURDATE()')->fetchColumn();
-    $stats['overdue'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado" AND fecha_cobro < CURDATE()')->fetchColumn();
-    $stats['clients_with_pending'] = (int) db()->query('SELECT COUNT(DISTINCT cliente_id) FROM cobros_servicios WHERE cliente_id IS NOT NULL AND LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
-    $stats['due_next_7_days_amount'] = (float) db()->query('SELECT COALESCE(SUM(monto), 0) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado" AND fecha_cobro BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)')->fetchColumn();
-    $stats['services_paid'] = (int) db()->query('SELECT COUNT(DISTINCT servicio_id) FROM cobros_servicios WHERE servicio_id IS NOT NULL AND LOWER(TRIM(estado)) = "pagado"')->fetchColumn();
-    $stats['services_with_debt'] = (int) db()->query('SELECT COUNT(DISTINCT servicio_id) FROM cobros_servicios WHERE servicio_id IS NOT NULL AND LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
+    $stats['due_today'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios cs LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id WHERE p.id IS NULL AND cs.fecha_cobro = CURDATE()')->fetchColumn();
+    $stats['overdue'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios cs LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id WHERE p.id IS NULL AND cs.fecha_cobro < CURDATE()')->fetchColumn();
+    $stats['clients_with_pending'] = (int) db()->query('SELECT COUNT(DISTINCT cs.cliente_id) FROM cobros_servicios cs LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id WHERE p.id IS NULL AND cs.cliente_id IS NOT NULL')->fetchColumn();
+    $stats['due_next_7_days_amount'] = (float) db()->query('SELECT COALESCE(SUM(cs.monto), 0) FROM cobros_servicios cs LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id WHERE p.id IS NULL AND cs.fecha_cobro BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)')->fetchColumn();
+    $stats['services_paid_total'] = (int) db()->query('SELECT COUNT(DISTINCT p.cobro_id) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id')->fetchColumn();
+    $stats['service_types_paid'] = (int) db()->query('SELECT COUNT(DISTINCT cs.servicio_id) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id WHERE cs.servicio_id IS NOT NULL')->fetchColumn();
+    $stats['services_with_debt'] = (int) db()->query('SELECT COUNT(DISTINCT cs.servicio_id) FROM cobros_servicios cs LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id WHERE p.id IS NULL AND cs.servicio_id IS NOT NULL')->fetchColumn();
 
     $stmt = db()->prepare(
         'SELECT cliente, referencia, monto, fecha_cobro, estado
          FROM cobros_servicios
-         WHERE LOWER(TRIM(estado)) <> "pagado"
+         WHERE NOT EXISTS (SELECT 1 FROM pagos_clientes p WHERE p.cobro_id = cobros_servicios.id)
          ORDER BY fecha_cobro ASC
          LIMIT 6'
     );
@@ -65,7 +67,7 @@ try {
                 COALESCE(s.nombre, "Servicio sin nombre") AS servicio
          FROM cobros_servicios cs
          LEFT JOIN servicios s ON s.id = cs.servicio_id
-         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
+         WHERE NOT EXISTS (SELECT 1 FROM pagos_clientes p WHERE p.cobro_id = cs.id)
            AND cs.fecha_cobro BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
          ORDER BY cs.fecha_cobro ASC, cs.monto DESC
          LIMIT 8'
@@ -95,7 +97,7 @@ try {
                 SUM(cs.monto) AS total_monto
          FROM cobros_servicios cs
          LEFT JOIN servicios s ON s.id = cs.servicio_id
-         WHERE LOWER(TRIM(cs.estado)) = "pagado"
+         WHERE EXISTS (SELECT 1 FROM pagos_clientes p WHERE p.cobro_id = cs.id)
          GROUP BY servicio
          ORDER BY total_monto DESC
          LIMIT 5'
@@ -109,7 +111,7 @@ try {
                 SUM(cs.monto) AS total_monto
          FROM cobros_servicios cs
          LEFT JOIN servicios s ON s.id = cs.servicio_id
-         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
+         WHERE NOT EXISTS (SELECT 1 FROM pagos_clientes p WHERE p.cobro_id = cs.id)
          GROUP BY servicio
          ORDER BY total_monto DESC
          LIMIT 5'
@@ -235,13 +237,13 @@ include('partials/html.php');
                                 <div class="d-flex align-items-center justify-content-between">
                                     <div>
                                         <p class="text-muted mb-1">Servicios pagados</p>
-                                        <h4 class="mb-0"><?php echo (int) $stats['services_paid']; ?></h4>
+                                        <h4 class="mb-0"><?php echo (int) $stats['services_paid_total']; ?></h4>
                                     </div>
                                     <span class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
                                         <i class="ti ti-rosette-discount-check fs-4"></i>
                                     </span>
                                 </div>
-                                <div class="mt-3 small text-muted">Servicios con deuda: <?php echo (int) $stats['services_with_debt']; ?></div>
+                                <div class="mt-3 small text-muted">Tipos de servicio pagados: <?php echo (int) $stats['service_types_paid']; ?> · Con deuda: <?php echo (int) $stats['services_with_debt']; ?></div>
                             </div>
                         </div>
                     </div>
@@ -488,16 +490,6 @@ include('partials/html.php');
         .dashboard-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
-        }
-
-        .dashboard-kpi-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border: 1px solid #edf1f7;
-            border-radius: 10px;
-            padding: 10px 12px;
-            background: #fff;
         }
 
         .dashboard-kpi-item {
