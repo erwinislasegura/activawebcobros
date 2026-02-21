@@ -333,7 +333,9 @@ try {
                       JOIN clientes c ON c.id = cs.cliente_id
                       JOIN servicios s ON s.id = cs.servicio_id
                       JOIN cobros_servicios cb ON cb.cliente_id = cs.cliente_id AND cb.servicio_id = cs.servicio_id
-                      WHERE LOWER(TRIM(cb.estado)) <> "pagado"';
+                      LEFT JOIN clientes_servicios_suspensiones ss ON ss.cliente_servicio_id = cs.id AND (ss.cobro_id = cb.id OR ss.cobro_id IS NULL)
+                      WHERE LOWER(TRIM(cb.estado)) <> "pagado"
+                        AND ss.id IS NULL';
 
     if ($clienteFiltroId > 0) {
         $sqlPendientes .= ' AND c.id = ' . (int) $clienteFiltroId;
