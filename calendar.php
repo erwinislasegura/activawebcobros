@@ -2,7 +2,38 @@
 require __DIR__ . '/app/bootstrap.php';
 
 $calendarEvents = [];
-$seenEvents = [];
+$eventMap = [];
+
+$registerEvent = static function (array &$map, string $fecha, string $tipo, string $cliente, string $servicio, string $color, int $cobroId): void {
+    if ($fecha === '') {
+        return;
+    }
+
+    $mapKey = implode('|', [$fecha, strtolower($cliente), strtolower($servicio)]);
+
+    if (!isset($map[$mapKey])) {
+        $map[$mapKey] = [
+            'id' => 'cobro-' . $cobroId . '-' . md5($mapKey),
+            'title' => sprintf('%s · %s', $cliente, $servicio),
+            'start' => $fecha,
+            'allDay' => true,
+            'backgroundColor' => $color,
+            'borderColor' => $color,
+            'extendedProps' => [
+                'tipos' => [],
+                'cliente' => $cliente,
+                'servicio' => $servicio,
+                'fecha' => $fecha,
+            ],
+        ];
+    }
+
+    if (!in_array($tipo, $map[$mapKey]['extendedProps']['tipos'], true)) {
+        $map[$mapKey]['extendedProps']['tipos'][] = $tipo;
+    }
+
+    $map[$mapKey]['extendedProps']['tipo'] = implode(', ', $map[$mapKey]['extendedProps']['tipos']);
+};
 
 try {
     $stmtCobros = db()->query(
@@ -19,92 +50,20 @@ try {
          LEFT JOIN servicios s ON s.id = cs.servicio_id
          ORDER BY cs.fecha_cobro'
     );
+
     foreach ($stmtCobros->fetchAll() as $cobro) {
         $color = $cobro['color'] ?: '#6c757d';
-        $cliente = $cobro['cliente'] ?: 'Cliente';
-        $servicio = $cobro['servicio'] ?: 'Servicio';
+        $cliente = trim((string) ($cobro['cliente'] ?: 'Cliente'));
+        $servicio = trim((string) ($cobro['servicio'] ?: 'Servicio'));
+        $cobroId = (int) $cobro['id'];
 
-        $appendEvent = static function (array $event) use (&$calendarEvents, &$seenEvents): void {
-            $dedupeKey = implode('|', [
-                $event['extendedProps']['tipo'] ?? '',
-                $event['start'] ?? '',
-                $event['extendedProps']['cliente'] ?? '',
-                $event['extendedProps']['servicio'] ?? '',
-            ]);
-
-            if (isset($seenEvents[$dedupeKey])) {
-                return;
-            }
-
-            $seenEvents[$dedupeKey] = true;
-            $calendarEvents[] = $event;
-        };
-
-        if (!empty($cobro['fecha_cobro'])) {
-            $appendEvent([
-                'id' => 'cobro-' . (int) $cobro['id'],
-                'title' => sprintf('%s · %s', $cliente, $servicio),
-                'start' => $cobro['fecha_cobro'],
-                'allDay' => true,
-                'backgroundColor' => $color,
-                'borderColor' => $color,
-                'extendedProps' => [
-                    'tipo' => 'Vencimiento',
-                    'cliente' => $cliente,
-                    'servicio' => $servicio,
-                    'fecha' => $cobro['fecha_cobro'],
-                ],
-            ]);
-        }
-        if (!empty($cobro['fecha_primer_aviso'])) {
-            $appendEvent([
-                'id' => 'aviso-1-' . (int) $cobro['id'],
-                'title' => sprintf('%s · %s', $cliente, $servicio),
-                'start' => $cobro['fecha_primer_aviso'],
-                'allDay' => true,
-                'backgroundColor' => $color,
-                'borderColor' => $color,
-                'extendedProps' => [
-                    'tipo' => 'Aviso 1',
-                    'cliente' => $cliente,
-                    'servicio' => $servicio,
-                    'fecha' => $cobro['fecha_primer_aviso'],
-                ],
-            ]);
-        }
-        if (!empty($cobro['fecha_segundo_aviso'])) {
-            $appendEvent([
-                'id' => 'aviso-2-' . (int) $cobro['id'],
-                'title' => sprintf('%s · %s', $cliente, $servicio),
-                'start' => $cobro['fecha_segundo_aviso'],
-                'allDay' => true,
-                'backgroundColor' => $color,
-                'borderColor' => $color,
-                'extendedProps' => [
-                    'tipo' => 'Aviso 2',
-                    'cliente' => $cliente,
-                    'servicio' => $servicio,
-                    'fecha' => $cobro['fecha_segundo_aviso'],
-                ],
-            ]);
-        }
-        if (!empty($cobro['fecha_tercer_aviso'])) {
-            $appendEvent([
-                'id' => 'aviso-3-' . (int) $cobro['id'],
-                'title' => sprintf('%s · %s', $cliente, $servicio),
-                'start' => $cobro['fecha_tercer_aviso'],
-                'allDay' => true,
-                'backgroundColor' => $color,
-                'borderColor' => $color,
-                'extendedProps' => [
-                    'tipo' => 'Aviso 3',
-                    'cliente' => $cliente,
-                    'servicio' => $servicio,
-                    'fecha' => $cobro['fecha_tercer_aviso'],
-                ],
-            ]);
-        }
+        $registerEvent($eventMap, (string) ($cobro['fecha_cobro'] ?? ''), 'Vencimiento', $cliente, $servicio, $color, $cobroId);
+        $registerEvent($eventMap, (string) ($cobro['fecha_primer_aviso'] ?? ''), 'Aviso 1', $cliente, $servicio, $color, $cobroId);
+        $registerEvent($eventMap, (string) ($cobro['fecha_segundo_aviso'] ?? ''), 'Aviso 2', $cliente, $servicio, $color, $cobroId);
+        $registerEvent($eventMap, (string) ($cobro['fecha_tercer_aviso'] ?? ''), 'Aviso 3', $cliente, $servicio, $color, $cobroId);
     }
+
+    $calendarEvents = array_values($eventMap);
 } catch (Exception $e) {
 } catch (Error $e) {
 }
@@ -197,7 +156,7 @@ try {
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="mb-2"><span class="text-muted">Tipo:</span> <strong id="event-detail-type">-</strong></p>
+                    <p class="mb-2"><span class="text-muted">Tipo(s):</span> <strong id="event-detail-type">-</strong></p>
                     <p class="mb-2"><span class="text-muted">Cliente:</span> <strong id="event-detail-client">-</strong></p>
                     <p class="mb-2"><span class="text-muted">Servicio:</span> <strong id="event-detail-service">-</strong></p>
                     <p class="mb-0"><span class="text-muted">Fecha:</span> <strong id="event-detail-date">-</strong></p>

@@ -16,9 +16,9 @@ class CalendarSchedule {
             this.modal = new bootstrap.Modal(modalElement, {backdrop: 'static'});
         }
 
-        const detailsModalElement = document.getElementById('event-details-modal');
-        if (detailsModalElement) {
-            this.detailsModal = new bootstrap.Modal(detailsModalElement);
+        this.detailsModalElement = document.getElementById('event-details-modal');
+        if (this.detailsModalElement && window.bootstrap?.Modal) {
+            this.detailsModal = new bootstrap.Modal(this.detailsModalElement);
         }
         this.calendar = document.getElementById('calendar');
         this.formEvent = document.getElementById('forms-event');
@@ -164,7 +164,7 @@ class CalendarSchedule {
     }
 
     showEventDetails(event) {
-        if (!event || !this.detailsModal) {
+        if (!event || (!this.detailsModal && !this.detailsModalElement)) {
             return;
         }
 
@@ -191,7 +191,19 @@ class CalendarSchedule {
             dateEl.textContent = this.formatDateLabel(props.fecha || event.start);
         }
 
-        this.detailsModal.show();
+        if (this.detailsModal) {
+            this.detailsModal.show();
+            return;
+        }
+
+        if (this.detailsModalElement) {
+            this.detailsModalElement.classList.add('show');
+            this.detailsModalElement.style.display = 'block';
+            this.detailsModalElement.removeAttribute('aria-hidden');
+            this.detailsModalElement.setAttribute('aria-modal', 'true');
+            this.detailsModalElement.setAttribute('role', 'dialog');
+            document.body.classList.add('modal-open');
+        }
     }
 
     init() {
@@ -255,8 +267,8 @@ class CalendarSchedule {
                 self.onSelect(info);
             },
             eventClick: function (info) {
+                info.jsEvent?.preventDefault();
                 if (self.isReadOnly) {
-                    info.jsEvent.preventDefault();
                     self.showEventDetails(info.event);
                     return;
                 }
@@ -267,6 +279,18 @@ class CalendarSchedule {
         });
 
         self.calendarObj.render();
+
+        if (self.detailsModalElement && !self.detailsModal) {
+            self.detailsModalElement.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    self.detailsModalElement.classList.remove('show');
+                    self.detailsModalElement.style.display = 'none';
+                    self.detailsModalElement.setAttribute('aria-hidden', 'true');
+                    self.detailsModalElement.removeAttribute('aria-modal');
+                    document.body.classList.remove('modal-open');
+                });
+            });
+        }
 
         // on new event button click
         if (!self.isReadOnly) {
