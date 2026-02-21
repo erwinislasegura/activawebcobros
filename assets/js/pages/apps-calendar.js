@@ -10,9 +10,15 @@ class CalendarSchedule {
         this.isReadOnly = window.calendarReadOnly === true;
         this.body = document.body;
         this.modal = null;
+        this.detailsModal = null;
         const modalElement = document.getElementById('event-modal');
         if (modalElement && !this.isReadOnly) {
             this.modal = new bootstrap.Modal(modalElement, {backdrop: 'static'});
+        }
+
+        this.detailsModalElement = document.getElementById('event-details-modal');
+        if (this.detailsModalElement && window.bootstrap?.Modal) {
+            this.detailsModal = new bootstrap.Modal(this.detailsModalElement);
         }
         this.calendar = document.getElementById('calendar');
         this.formEvent = document.getElementById('forms-event');
@@ -144,6 +150,62 @@ class CalendarSchedule {
         return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
 
+
+    formatDateLabel(date) {
+        if (!date) {
+            return '-';
+        }
+        const formatter = new Intl.DateTimeFormat(window.calendarLocale || 'es', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        });
+        return formatter.format(new Date(date));
+    }
+
+    showEventDetails(event) {
+        if (!event || (!this.detailsModal && !this.detailsModalElement)) {
+            return;
+        }
+
+        const props = event.extendedProps || {};
+        const titleEl = document.getElementById('event-details-title');
+        const typeEl = document.getElementById('event-detail-type');
+        const clientEl = document.getElementById('event-detail-client');
+        const serviceEl = document.getElementById('event-detail-service');
+        const dateEl = document.getElementById('event-detail-date');
+
+        if (titleEl) {
+            titleEl.textContent = event.title || 'Detalle del evento';
+        }
+        if (typeEl) {
+            typeEl.textContent = props.tipo || 'Sin tipo';
+        }
+        if (clientEl) {
+            clientEl.textContent = props.cliente || '-';
+        }
+        if (serviceEl) {
+            serviceEl.textContent = props.servicio || '-';
+        }
+        if (dateEl) {
+            dateEl.textContent = this.formatDateLabel(props.fecha || event.start);
+        }
+
+        if (this.detailsModal) {
+            this.detailsModal.show();
+            return;
+        }
+
+        if (this.detailsModalElement) {
+            this.detailsModalElement.classList.add('show');
+            this.detailsModalElement.style.display = 'block';
+            this.detailsModalElement.removeAttribute('aria-hidden');
+            this.detailsModalElement.setAttribute('aria-modal', 'true');
+            this.detailsModalElement.setAttribute('role', 'dialog');
+            document.body.classList.add('modal-open');
+        }
+    }
+
     init() {
         /*  Initialize the calendar  */
         const today = new Date();
@@ -204,12 +266,31 @@ class CalendarSchedule {
             dateClick: self.isReadOnly ? null : function (info) {
                 self.onSelect(info);
             },
-            eventClick: self.isReadOnly ? null : function (info) {
+            eventClick: function (info) {
+                info.jsEvent?.preventDefault();
+                if (self.isReadOnly) {
+                    self.showEventDetails(info.event);
+                    return;
+                }
                 self.onEventClick(info);
-            }
+            },
+            eventDisplay: 'block',
+            displayEventTime: false
         });
 
         self.calendarObj.render();
+
+        if (self.detailsModalElement && !self.detailsModal) {
+            self.detailsModalElement.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    self.detailsModalElement.classList.remove('show');
+                    self.detailsModalElement.style.display = 'none';
+                    self.detailsModalElement.setAttribute('aria-hidden', 'true');
+                    self.detailsModalElement.removeAttribute('aria-modal');
+                    document.body.classList.remove('modal-open');
+                });
+            });
+        }
 
         // on new event button click
         if (!self.isReadOnly) {
