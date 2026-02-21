@@ -25,4 +25,4 @@ $metaKeywords = 'municipalidad, gestión municipal, eventos municipales, autorid
 
 <!-- App favicon -->
 <link rel="shortcut icon" href="<?php echo htmlspecialchars($logoPath, ENT_QUOTES, 'UTF-8'); ?>">
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" href="manifest.php">

@@ -32,6 +32,7 @@ if (!isset($_SESSION['user'])) {
         'eventos-acreditacion-medios.php',
         'm.php',
         'confirmation.php',
+        'manifest.php',
     ];
 
     if (!in_array($currentScript, $publicScripts, true) && strncmp($currentScript, 'auth-', 5) !== 0) {
