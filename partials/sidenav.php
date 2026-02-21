@@ -27,43 +27,49 @@
         </span>
     </a>
 
-    <!-- Sidebar Hover Menu Toggle Button -->
     <button class="button-on-hover">
         <i class="ti ti-menu-4 fs-22 align-middle"></i>
     </button>
 
-    <!-- Full Sidebar Menu Close Button -->
     <button class="button-close-offcanvas">
         <i class="ti ti-x align-middle"></i>
     </button>
 
     <div class="scrollbar" data-simplebar>
-
-        <!--- Sidenav Menu -->
         <ul class="side-nav">
-            <li class="side-nav-title mt-2" data-lang="menu-title">Gestión</li>
+            <li class="side-nav-title mt-2" data-lang="menu-title">Flujo de cobros</li>
 
             <li class="side-nav-item">
                 <a href="calendar.php" class="side-nav-link">
                     <span class="menu-icon"><i data-lucide="calendar"></i></span>
-                    <span class="menu-text">Calendario</span>
+                    <span class="menu-text">Agenda</span>
                 </a>
+            </li>
+
+            <li class="side-nav-item">
+                <a href="#modulo-clientes" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-clientes">
+                    <span class="menu-icon"><i data-lucide="users-2"></i></span>
+                    <span class="menu-text">1. Clientes</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-clientes">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item"><a href="clientes-crear.php" class="side-nav-link">Alta cliente</a></li>
+                        <li class="side-nav-item"><a href="clientes-servicios.php" class="side-nav-link">Suspensiones</a></li>
+                    </ul>
+                </div>
             </li>
 
             <li class="side-nav-item">
                 <a href="#modulo-servicios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-servicios">
                     <span class="menu-icon"><i data-lucide="briefcase"></i></span>
-                    <span class="menu-text">Servicios</span>
+                    <span class="menu-text">2. Servicios</span>
                     <span class="menu-arrow"></span>
                 </a>
                 <div class="collapse" id="modulo-servicios">
                     <ul class="side-nav sub-menu">
-                        <li class="side-nav-item">
-                            <a href="cobros-servicios-agregar.php" class="side-nav-link">Crear servicios</a>
-                        </li>
-                        <li class="side-nav-item">
-                            <a href="tipos-servicios.php" class="side-nav-link">Tipos de servicios</a>
-                        </li>
+                        <li class="side-nav-item"><a href="cobros-servicios-agregar.php" class="side-nav-link">Catálogo</a></li>
+                        <li class="side-nav-item"><a href="tipos-servicios.php" class="side-nav-link">Tipos</a></li>
                     </ul>
                 </div>
             </li>
@@ -71,23 +77,15 @@
             <li class="side-nav-item">
                 <a href="#modulo-cobros-servicios" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-cobros-servicios">
                     <span class="menu-icon"><i data-lucide="receipt"></i></span>
-                    <span class="menu-text">Cobros de servicios</span>
+                    <span class="menu-text">3. Cobranza</span>
                     <span class="menu-arrow"></span>
                 </a>
                 <div class="collapse" id="modulo-cobros-servicios">
                     <ul class="side-nav sub-menu">
-                        <li class="side-nav-item">
-                            <a href="cobros-servicios-registros.php" class="side-nav-link">Registros de cobros</a>
-                        </li>
-                        <li class="side-nav-item">
-                            <a href="cobros-totales.php" class="side-nav-link">Totales por cliente</a>
-                        </li>
-                        <li class="side-nav-item">
-                            <a href="cobros-pagos.php" class="side-nav-link">Registrar pagos</a>
-                        </li>
-                        <li class="side-nav-item">
-                            <a href="cobros-avisos.php" class="side-nav-link">Listado de avisos</a>
-                        </li>
+                        <li class="side-nav-item"><a href="cobros-servicios-registros.php" class="side-nav-link">Cobros</a></li>
+                        <li class="side-nav-item"><a href="cobros-pagos.php" class="side-nav-link">Pagos</a></li>
+                        <li class="side-nav-item"><a href="cobros-avisos.php" class="side-nav-link">Avisos</a></li>
+                        <li class="side-nav-item"><a href="cobros-totales.php" class="side-nav-link">Totales</a></li>
                     </ul>
                 </div>
             </li>
@@ -96,45 +94,19 @@
                 <li class="side-nav-item">
                     <a href="#modulo-flow" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-flow">
                         <span class="menu-icon"><i data-lucide="credit-card"></i></span>
-                        <span class="menu-text">Pagos Flow</span>
+                        <span class="menu-text">4. Flow</span>
                         <span class="menu-arrow"></span>
                     </a>
                     <div class="collapse" id="modulo-flow">
                         <ul class="side-nav sub-menu">
-                            <li class="side-nav-item">
-                                <a href="flow/config/index.php" class="side-nav-link">Configuración</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="flow/payments/new.php" class="side-nav-link">Crear pago</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="flow/orders/index.php" class="side-nav-link">Órdenes / Estados</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="flow/webhook/logs.php" class="side-nav-link">Logs Webhook</a>
-                            </li>
+                            <li class="side-nav-item"><a href="flow/config/index.php" class="side-nav-link">Ajustes</a></li>
+                            <li class="side-nav-item"><a href="flow/payments/new.php" class="side-nav-link">Nuevo pago</a></li>
+                            <li class="side-nav-item"><a href="flow/orders/index.php" class="side-nav-link">Órdenes</a></li>
+                            <li class="side-nav-item"><a href="flow/webhook/logs.php" class="side-nav-link">Webhook</a></li>
                         </ul>
                     </div>
                 </li>
             <?php endif; ?>
-
-            <li class="side-nav-item">
-                <a href="#modulo-clientes" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-clientes">
-                    <span class="menu-icon"><i data-lucide="users-2"></i></span>
-                    <span class="menu-text">Clientes</span>
-                    <span class="menu-arrow"></span>
-                </a>
-                <div class="collapse" id="modulo-clientes">
-                    <ul class="side-nav sub-menu">
-                        <li class="side-nav-item">
-                            <a href="clientes-crear.php" class="side-nav-link">Crear cliente</a>
-                        </li>
-                            <li class="side-nav-item">
-                                <a href="clientes-servicios.php" class="side-nav-link">Suspender servicios</a>
-                            </li>
-                    </ul>
-                </div>
-            </li>
 
             <li class="side-nav-title" data-lang="settings-title">Administración</li>
 
@@ -148,9 +120,7 @@
                     <div class="collapse" id="modulo-usuarios">
                         <ul class="side-nav sub-menu">
                             <?php if (has_permission('usuarios', 'create')) : ?>
-                                <li class="side-nav-item">
-                                    <a href="usuarios-crear.php" class="side-nav-link">Crear usuario</a>
-                                </li>
+                                <li class="side-nav-item"><a href="usuarios-crear.php" class="side-nav-link">Alta usuario</a></li>
                             <?php endif; ?>
                         </ul>
                     </div>
@@ -161,19 +131,15 @@
                 <li class="side-nav-item">
                     <a href="#modulo-roles" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-roles">
                         <span class="menu-icon"><i data-lucide="key-round"></i></span>
-                        <span class="menu-text">Roles y permisos</span>
+                        <span class="menu-text">Roles</span>
                         <span class="menu-arrow"></span>
                     </a>
                     <div class="collapse" id="modulo-roles">
                         <ul class="side-nav sub-menu">
                             <?php if (has_permission('roles', 'create')) : ?>
-                                <li class="side-nav-item">
-                                    <a href="roles-editar.php" class="side-nav-link">Crear rol</a>
-                                </li>
+                                <li class="side-nav-item"><a href="roles-editar.php" class="side-nav-link">Nuevo rol</a></li>
                             <?php endif; ?>
-                            <li class="side-nav-item">
-                                <a href="roles-permisos.php" class="side-nav-link">Matriz permisos</a>
-                            </li>
+                            <li class="side-nav-item"><a href="roles-permisos.php" class="side-nav-link">Permisos</a></li>
                         </ul>
                     </div>
                 </li>
@@ -183,26 +149,16 @@
                 <li class="side-nav-item">
                     <a href="#modulo-mantenedores" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-mantenedores">
                         <span class="menu-icon"><i data-lucide="settings-2"></i></span>
-                        <span class="menu-text">Configuración</span>
+                        <span class="menu-text">Ajustes</span>
                         <span class="menu-arrow"></span>
                     </a>
                     <div class="collapse" id="modulo-mantenedores">
                         <ul class="side-nav sub-menu">
-                            <li class="side-nav-item">
-                                <a href="municipalidad.php" class="side-nav-link">Configurar empresa</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="notificaciones-correo.php" class="side-nav-link">Correo de envío</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp envíos</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="configuracion-avisos.php" class="side-nav-link">Plantillas de avisos</a>
-                            </li>
-                            <li class="side-nav-item">
-                                <a href="configuracion-suspension-correo.php" class="side-nav-link">Correo suspensión servicios</a>
-                            </li>
+                            <li class="side-nav-item"><a href="municipalidad.php" class="side-nav-link">Empresa</a></li>
+                            <li class="side-nav-item"><a href="notificaciones-correo.php" class="side-nav-link">Correo</a></li>
+                            <li class="side-nav-item"><a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp</a></li>
+                            <li class="side-nav-item"><a href="configuracion-avisos.php" class="side-nav-link">Plantillas avisos</a></li>
+                            <li class="side-nav-item"><a href="configuracion-suspension-correo.php" class="side-nav-link">Plantilla suspensión</a></li>
                         </ul>
                     </div>
                 </li>
