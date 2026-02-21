@@ -32,7 +32,7 @@ function append_suspension_payment_button(string $bodyHtml, string $link): strin
         <tr>
           <td style="padding:14px;">
             <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:6px;">Paga aquí!</div>
-            <a href="{$safeLink}" style="background:#1D4ED8;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:block;width:100%;box-sizing:border-box;font-size:13px;font-weight:600;text-align:center;">
+            <a href="{$safeLink}" style="background:#16A34A;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:block;width:100%;box-sizing:border-box;font-size:13px;font-weight:600;text-align:center;">
               Pagar ahora
             </a>
             <div style="padding-top:8px;font-size:12px;color:#6B7280;line-height:1.5;">
@@ -77,13 +77,19 @@ function enviar_correo_suspension(string $destinatario, string $asunto, string $
 
     $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
 
+    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
+
     $headers = [
         'MIME-Version: 1.0',
         'Content-type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+        'Date: ' . date(DATE_RFC2822),
+        'Message-ID: ' . $messageId,
         'From: ' . $displayName . ' <' . $fromEmail . '>',
         'Reply-To: ' . $fromEmail,
         'Return-Path: ' . $fromEmail,
         'X-Mailer: PHP/' . phpversion(),
+        'X-Auto-Response-Suppress: OOF, AutoReply',
     ];
 
     $headersString = implode("\r\n", $headers);
@@ -98,7 +104,7 @@ function enviar_correo_suspension(string $destinatario, string $asunto, string $
 }
 
 
-$defaultSubject = 'URGENTE: Suspensión de servicio {{servicio_nombre}}';
+$defaultSubject = 'Regularización de {{servicio_nombre}} para continuidad operativa';
 $defaultBody = <<<'HTML'
 <!DOCTYPE html>
 <html lang="es">
@@ -110,13 +116,14 @@ $defaultBody = <<<'HTML'
 <tr><td style="height:4px;background:#FCA5A5;line-height:4px;font-size:0;">&nbsp;</td></tr>
 <tr><td style="padding:24px;color:#1f2937;font-size:14px;line-height:1.65;">
 <p style="margin:0 0 12px 0;">Estimado/a <strong>{{cliente_nombre}}</strong>,</p>
-<p style="margin:0 0 14px 0;color:#374151;">Le informamos la <strong style="color:#b91c1c;">suspensión inmediata</strong> del servicio <strong>{{servicio_nombre}}</strong> por pago pendiente.</p>
+<p style="margin:0 0 14px 0;color:#374151;">Le informamos la <strong style="color:#b91c1c;">suspensión inmediata</strong> del servicio <strong>{{servicio_nombre}}</strong> debido a pago pendiente.</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 18px 0;background:#fff5f5;border:1px solid #fecaca;border-radius:12px;"><tr><td style="padding:14px;">
 <div style="margin-bottom:6px;"><strong>Motivo:</strong> {{motivo_suspension}}</div>
 <div style="margin-bottom:6px;"><strong>Detalle:</strong> {{detalle_suspension}}</div>
 <div><strong>Monto pendiente:</strong> {{monto_pendiente}}</div>
 </td></tr></table>
-<p style="margin:0 0 12px 0;color:#4B5563;">Esta situación puede afectar la continuidad de su sitio web, correos corporativos y presencia digital. Para evitar impactos operativos, le recomendamos regularizar el pago a la brevedad.</p>
+<p style="margin:0 0 12px 0;color:#4B5563;">Queremos ayudarle a restablecer su operación cuanto antes. Mantener este saldo pendiente puede provocar interrupciones en su sitio web, correos corporativos y canales de contacto con clientes, afectando su continuidad comercial, confianza de usuarios y posicionamiento digital.</p>
+<p style="margin:0 0 12px 0;color:#4B5563;">Para evitar pérdidas de visibilidad y mantener sus servicios activos, le recomendamos regularizar hoy mismo mediante el botón de pago seguro incluido en este correo. Una vez acreditado el pago, su caso podrá ser priorizado para reactivación en el menor tiempo posible.</p>
 <p>Atentamente,<br><strong>Departamento de Soporte y Servicios Digitales</strong><br>{{municipalidad_nombre}}</p>
 </td></tr>
 </table>
@@ -409,14 +416,22 @@ try {
                                 <td>#<?php echo (int) $row['cobro_id']; ?><br><small><?php echo htmlspecialchars((string) ($row['estado'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small></td>
                                 <td>$<?php echo number_format((float) $row['monto'], 2, ',', '.'); ?></td>
                                 <td colspan="3">
-                                    <form method="post" class="row g-2">
+                                    <form method="post" class="row g-2 js-suspension-form">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                         <input type="hidden" name="action" value="suspender">
                                         <input type="hidden" name="cliente_servicio_id" value="<?php echo (int) $row['cliente_servicio_id']; ?>">
                                         <input type="hidden" name="cobro_id" value="<?php echo (int) $row['cobro_id']; ?>">
                                         <input type="hidden" name="cliente_id" value="<?php echo (int) $row['cliente_id']; ?>">
-                                        <div class="col-md-5"><input type="text" name="motivo" class="form-control form-control-sm" placeholder="Motivo (obligatorio)" required></div>
-                                        <div class="col-md-5"><input type="text" name="detalle" class="form-control form-control-sm" placeholder="Detalle importante (web/correo sin servicio)"></div>
+                                        <div class="col-md-3">
+                                            <select class="form-select form-select-sm js-plantilla-suspension" aria-label="Plantillas de suspensión">
+                                                <option value="">Plantilla rápida</option>
+                                                <option value="mora" data-motivo="Facturas vencidas sin regularización." data-detalle="Suspensión preventiva por mora. Sitio y correo podrían quedar fuera de servicio hasta acreditar pago.">Mora</option>
+                                                <option value="recordatorio" data-motivo="No pago luego de avisos previos." data-detalle="Sin regularización tras múltiples avisos. Se recomienda pago inmediato para evitar pérdida de continuidad digital.">Sin respuesta</option>
+                                                <option value="reactivacion" data-motivo="Pendiente para reactivación." data-detalle="Regularizando hoy se gestiona reactivación prioritaria de servicios y correo corporativo.">Reactivación</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4"><input type="text" name="motivo" class="form-control form-control-sm js-motivo" placeholder="Motivo (obligatorio)" required></div>
+                                        <div class="col-md-3"><input type="text" name="detalle" class="form-control form-control-sm js-detalle" placeholder="Detalle importante (web/correo sin servicio)"></div>
                                         <div class="col-md-2"><button class="btn btn-danger btn-sm w-100" type="submit">Suspender</button></div>
                                     </form>
                                 </td>
@@ -465,5 +480,23 @@ try {
 </div>
 <?php include('partials/customizer.php'); ?>
 <?php include('partials/footer-scripts.php'); ?>
+<script>
+document.querySelectorAll('.js-suspension-form').forEach((form) => {
+    const selector = form.querySelector('.js-plantilla-suspension');
+    const motivo = form.querySelector('.js-motivo');
+    const detalle = form.querySelector('.js-detalle');
+
+    if (!selector || !motivo || !detalle) return;
+
+    selector.addEventListener('change', () => {
+        const option = selector.options[selector.selectedIndex];
+        const motivoText = option.getAttribute('data-motivo') || '';
+        const detalleText = option.getAttribute('data-detalle') || '';
+
+        if (motivoText !== '') motivo.value = motivoText;
+        if (detalleText !== '') detalle.value = detalleText;
+    });
+});
+</script>
 </body>
 </html>

@@ -21,7 +21,7 @@ try {
 } catch (Error $e) {
 }
 
-$defaultSubject = 'URGENTE: Suspensión de servicio {{servicio_nombre}}';
+$defaultSubject = 'Regularización de {{servicio_nombre}} para continuidad operativa';
 $defaultBody = <<<'HTML'
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Suspensión urgente</title></head>
@@ -32,17 +32,18 @@ $defaultBody = <<<'HTML'
 <tr><td style="height:4px;background:#FCA5A5;line-height:4px;font-size:0;">&nbsp;</td></tr>
 <tr><td style="padding:24px;color:#1f2937;font-size:14px;line-height:1.65;">
 <p style="margin:0 0 12px 0;">Estimado/a <strong>{{cliente_nombre}}</strong>,</p>
-<p style="margin:0 0 14px 0;color:#374151;">Le informamos la <strong style="color:#b91c1c;">suspensión inmediata</strong> del servicio <strong>{{servicio_nombre}}</strong> por pago pendiente.</p>
+<p style="margin:0 0 14px 0;color:#374151;">Le informamos la <strong style="color:#b91c1c;">suspensión inmediata</strong> del servicio <strong>{{servicio_nombre}}</strong> debido a pago pendiente.</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 18px 0;background:#fff5f5;border:1px solid #fecaca;border-radius:12px;"><tr><td style="padding:14px;">
 <div style="margin-bottom:6px;"><strong>Motivo:</strong> {{motivo_suspension}}</div>
 <div style="margin-bottom:6px;"><strong>Detalle:</strong> {{detalle_suspension}}</div>
 <div><strong>Monto pendiente:</strong> {{monto_pendiente}}</div>
 </td></tr></table>
-<p style="margin:0 0 12px 0;color:#4B5563;">Esta situación puede afectar la continuidad de su sitio web, correos corporativos y presencia digital. Para evitar impactos operativos, le recomendamos regularizar el pago a la brevedad.</p>
+<p style="margin:0 0 12px 0;color:#4B5563;">Queremos ayudarle a restablecer su operación cuanto antes. Mantener este saldo pendiente puede provocar interrupciones en su sitio web, correos corporativos y canales de contacto con clientes, afectando su continuidad comercial, confianza de usuarios y posicionamiento digital.</p>
+<p style="margin:0 0 12px 0;color:#4B5563;">Para evitar pérdidas de visibilidad y mantener sus servicios activos, le recomendamos regularizar hoy mismo mediante el botón de pago seguro incluido en este correo. Una vez acreditado el pago, su caso podrá ser priorizado para reactivación en el menor tiempo posible.</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0;"><tr><td>
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:14px;">
 <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:6px;">Paga aquí!</div>
-<a href="{{link_boton_pago}}" style="background:#1D4ED8;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:block;width:100%;box-sizing:border-box;font-size:13px;font-weight:600;text-align:center;">Pagar ahora</a>
+<a href="{{link_boton_pago}}" style="background:#16A34A;color:#ffffff;text-decoration:none;padding:14px 18px;border-radius:999px;display:block;width:100%;box-sizing:border-box;font-size:13px;font-weight:600;text-align:center;">Pagar ahora</a>
 <div style="padding-top:8px;font-size:12px;color:#6B7280;line-height:1.5;">Pago seguro y protegido: este enlace pertenece al sistema oficial de cobros y protege sus datos con cifrado. Si tiene dudas, puede responder este correo para validar el pago antes de realizarlo.</div>
 </td></tr></table>
 </td></tr></table>

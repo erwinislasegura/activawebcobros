@@ -234,13 +234,23 @@ try {
                     $subject = render_template($template['subject'], $data);
                     $bodyHtml = render_template($template['body_html'], $data);
                     $bodyHtml = append_payment_button($bodyHtml, (string) ($cobro['link_boton_pago'] ?? ''));
+                    $subjectEncoded = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+                    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
+                    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
                     $headers = [
                         'MIME-Version: 1.0',
                         'Content-type: text/html; charset=UTF-8',
-                        'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
+                        'Content-Transfer-Encoding: 8bit',
+                        'Date: ' . date(DATE_RFC2822),
+                        'Message-ID: ' . $messageId,
+                        'From: ' . $displayName . ' <' . $fromEmail . '>',
+                        'Reply-To: ' . $fromEmail,
+                        'Return-Path: ' . $fromEmail,
+                        'X-Mailer: PHP/' . phpversion(),
+                        'X-Auto-Response-Suppress: OOF, AutoReply',
                     ];
 
-                    if (@mail($cobro['cliente_correo'], $subject, $bodyHtml, implode("\r\n", $headers))) {
+                    if (@mail($cobro['cliente_correo'], $subjectEncoded, $bodyHtml, implode("\r\n", $headers))) {
                         if ($sentColumn !== null) {
                             $stmtUpdate = db()->prepare("UPDATE cobros_servicios SET {$sentColumn} = NOW() WHERE id = ?");
                             $stmtUpdate->execute([$cobroId]);
