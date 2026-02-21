@@ -33,6 +33,7 @@ if (!isset($_SESSION['user'])) {
         'm.php',
         'confirmation.php',
         'manifest.php',
+        'pwa-icon.php',
     ];
 
     if (!in_array($currentScript, $publicScripts, true) && strncmp($currentScript, 'auth-', 5) !== 0) {

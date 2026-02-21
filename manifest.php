@@ -21,30 +21,31 @@ $assetUrl = static function (string $path): string {
     return rtrim(base_url(), '/') . '/' . ltrim($path, '/');
 };
 
-$icon = $assetUrl($logoPath);
+$icon192 = $assetUrl('pwa-icon.php?size=192');
+$icon512 = $assetUrl('pwa-icon.php?size=512');
 
 $manifest = [
     'name' => $name,
     'short_name' => $shortName,
     'description' => $description,
-    'start_url' => '/index.php',
-    'scope' => '/',
+    'start_url' => './index.php',
+    'scope' => './',
     'display' => 'standalone',
     'orientation' => 'portrait',
     'background_color' => '#ffffff',
     'theme_color' => $themeColor,
     'icons' => [
         [
-            'src' => $icon,
-            'sizes' => 'any',
+            'src' => $icon192,
+            'sizes' => '192x192',
             'type' => 'image/png',
             'purpose' => 'any',
         ],
         [
-            'src' => $icon,
-            'sizes' => 'any',
+            'src' => $icon512,
+            'sizes' => '512x512',
             'type' => 'image/png',
-            'purpose' => 'maskable',
+            'purpose' => 'maskable any',
         ],
     ],
 ];
