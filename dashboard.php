@@ -12,15 +12,22 @@ $stats = [
     'pending_amount' => 0.0,
     'paid_amount' => 0.0,
     'paid_today_amount' => 0.0,
+    'paid_month_amount' => 0.0,
     'collections_total' => 0,
     'collections_paid' => 0,
     'collections_pending' => 0,
     'due_today' => 0,
     'overdue' => 0,
     'clients_with_pending' => 0,
+    'due_next_7_days_amount' => 0.0,
+    'services_paid' => 0,
+    'services_with_debt' => 0,
 ];
 $upcomingCollections = [];
 $recentPayments = [];
+$probablePayments = [];
+$paidServices = [];
+$debtServices = [];
 $collectionsByMonth = [];
 $paymentsByMonth = [];
 $monthLabels = [];
@@ -32,29 +39,83 @@ try {
     $stats['pending_amount'] = (float) db()->query('SELECT COALESCE(SUM(monto), 0) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
     $stats['paid_amount'] = (float) db()->query('SELECT COALESCE(SUM(p.monto), 0) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id')->fetchColumn();
     $stats['paid_today_amount'] = (float) db()->query('SELECT COALESCE(SUM(p.monto), 0) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id WHERE DATE(p.fecha_pago) = CURDATE()')->fetchColumn();
+    $stats['paid_month_amount'] = (float) db()->query('SELECT COALESCE(SUM(p.monto), 0) FROM pagos_clientes p INNER JOIN cobros_servicios cs ON cs.id = p.cobro_id WHERE DATE_FORMAT(p.fecha_pago, "%Y-%m") = DATE_FORMAT(CURDATE(), "%Y-%m")')->fetchColumn();
     $stats['due_today'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado" AND fecha_cobro = CURDATE()')->fetchColumn();
     $stats['overdue'] = (int) db()->query('SELECT COUNT(*) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado" AND fecha_cobro < CURDATE()')->fetchColumn();
     $stats['clients_with_pending'] = (int) db()->query('SELECT COUNT(DISTINCT cliente_id) FROM cobros_servicios WHERE cliente_id IS NOT NULL AND LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
+    $stats['due_next_7_days_amount'] = (float) db()->query('SELECT COALESCE(SUM(monto), 0) FROM cobros_servicios WHERE LOWER(TRIM(estado)) <> "pagado" AND fecha_cobro BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)')->fetchColumn();
+    $stats['services_paid'] = (int) db()->query('SELECT COUNT(DISTINCT servicio_id) FROM cobros_servicios WHERE servicio_id IS NOT NULL AND LOWER(TRIM(estado)) = "pagado"')->fetchColumn();
+    $stats['services_with_debt'] = (int) db()->query('SELECT COUNT(DISTINCT servicio_id) FROM cobros_servicios WHERE servicio_id IS NOT NULL AND LOWER(TRIM(estado)) <> "pagado"')->fetchColumn();
 
     $stmt = db()->prepare(
         'SELECT cliente, referencia, monto, fecha_cobro, estado
          FROM cobros_servicios
          WHERE LOWER(TRIM(estado)) <> "pagado"
          ORDER BY fecha_cobro ASC
-         LIMIT 5'
+         LIMIT 6'
     );
     $stmt->execute();
     $upcomingCollections = $stmt->fetchAll();
 
     $stmt = db()->prepare(
-        'SELECT c.cliente, p.monto, p.fecha_pago, p.metodo
+        'SELECT cs.cliente,
+                cs.referencia,
+                cs.fecha_cobro,
+                cs.monto,
+                COALESCE(s.nombre, "Servicio sin nombre") AS servicio
+         FROM cobros_servicios cs
+         LEFT JOIN servicios s ON s.id = cs.servicio_id
+         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
+           AND cs.fecha_cobro BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+         ORDER BY cs.fecha_cobro ASC, cs.monto DESC
+         LIMIT 8'
+    );
+    $stmt->execute();
+    $probablePayments = $stmt->fetchAll();
+
+    $stmt = db()->prepare(
+        'SELECT c.cliente,
+                c.referencia,
+                p.monto,
+                p.fecha_pago,
+                p.metodo,
+                COALESCE(s.nombre, "Servicio sin nombre") AS servicio
          FROM pagos_clientes p
          INNER JOIN cobros_servicios c ON c.id = p.cobro_id
+         LEFT JOIN servicios s ON s.id = c.servicio_id
          ORDER BY p.fecha_pago DESC
-         LIMIT 5'
+         LIMIT 8'
     );
     $stmt->execute();
     $recentPayments = $stmt->fetchAll();
+
+    $stmt = db()->prepare(
+        'SELECT COALESCE(s.nombre, "Servicio sin nombre") AS servicio,
+                COUNT(*) AS total_cobros,
+                SUM(cs.monto) AS total_monto
+         FROM cobros_servicios cs
+         LEFT JOIN servicios s ON s.id = cs.servicio_id
+         WHERE LOWER(TRIM(cs.estado)) = "pagado"
+         GROUP BY servicio
+         ORDER BY total_monto DESC
+         LIMIT 5'
+    );
+    $stmt->execute();
+    $paidServices = $stmt->fetchAll();
+
+    $stmt = db()->prepare(
+        'SELECT COALESCE(s.nombre, "Servicio sin nombre") AS servicio,
+                COUNT(*) AS total_cobros,
+                SUM(cs.monto) AS total_monto
+         FROM cobros_servicios cs
+         LEFT JOIN servicios s ON s.id = cs.servicio_id
+         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
+         GROUP BY servicio
+         ORDER BY total_monto DESC
+         LIMIT 5'
+    );
+    $stmt->execute();
+    $debtServices = $stmt->fetchAll();
 
     $stmt = db()->prepare(
         'SELECT DATE_FORMAT(fecha_cobro, "%Y-%m") AS month_key, SUM(monto) AS total
@@ -125,14 +186,9 @@ include('partials/html.php');
 </head>
 
 <body>
-    <!-- Begin page -->
     <div class="wrapper">
 
         <?php include('partials/menu.php'); ?>
-
-        <!-- ============================================================== -->
-        <!-- Start Main Content -->
-        <!-- ============================================================== -->
 
         <div class="content-page">
 
@@ -153,7 +209,7 @@ include('partials/html.php');
                                         <i class="ti ti-alert-circle fs-4"></i>
                                     </span>
                                 </div>
-                                <div class="mt-3 small text-muted">Cobros pendientes: <?php echo (int) $stats['collections_pending']; ?></div>
+                                <div class="mt-3 small text-muted">Deuda en próximos 7 días: <?php echo $moneyFormatter($stats['due_next_7_days_amount']); ?></div>
                             </div>
                         </div>
                     </div>
@@ -166,10 +222,26 @@ include('partials/html.php');
                                         <h4 class="mb-0"><?php echo $moneyFormatter($stats['paid_today_amount']); ?></h4>
                                     </div>
                                     <span class="avatar-sm rounded-circle bg-success-subtle text-success d-flex align-items-center justify-content-center">
-                                        <i class="ti ti-credit-card fs-4"></i>
+                                        <i class="ti ti-cash-banknote fs-4"></i>
                                     </span>
                                 </div>
-                                <div class="mt-3 small text-muted">Total histórico pagado: <?php echo $moneyFormatter($stats['paid_amount']); ?></div>
+                                <div class="mt-3 small text-muted">Pagado este mes: <?php echo $moneyFormatter($stats['paid_month_amount']); ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
+                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <p class="text-muted mb-1">Servicios pagados</p>
+                                        <h4 class="mb-0"><?php echo (int) $stats['services_paid']; ?></h4>
+                                    </div>
+                                    <span class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                                        <i class="ti ti-rosette-discount-check fs-4"></i>
+                                    </span>
+                                </div>
+                                <div class="mt-3 small text-muted">Servicios con deuda: <?php echo (int) $stats['services_with_debt']; ?></div>
                             </div>
                         </div>
                     </div>
@@ -181,34 +253,18 @@ include('partials/html.php');
                                         <p class="text-muted mb-1">Efectividad de cobro</p>
                                         <h4 class="mb-0"><?php echo $collectionRate; ?>%</h4>
                                     </div>
-                                    <span class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                                    <span class="avatar-sm rounded-circle bg-info-subtle text-info d-flex align-items-center justify-content-center">
                                         <i class="ti ti-chart-line fs-4"></i>
                                     </span>
                                 </div>
-                                <div class="mt-3 small text-muted">Cobros pagados: <?php echo (int) $stats['collections_paid']; ?> de <?php echo (int) $stats['collections_total']; ?></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-xl-3 dashboard-stat-col">
-                        <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <p class="text-muted mb-1">Cobros críticos</p>
-                                        <h4 class="mb-0"><?php echo (int) $stats['overdue']; ?></h4>
-                                    </div>
-                                    <span class="avatar-sm rounded-circle bg-danger-subtle text-danger d-flex align-items-center justify-content-center">
-                                        <i class="ti ti-alert-triangle fs-4"></i>
-                                    </span>
-                                </div>
-                                <div class="mt-3 small text-muted">Vencen hoy: <?php echo (int) $stats['due_today']; ?> · Clientes con deuda: <?php echo (int) $stats['clients_with_pending']; ?></div>
+                                <div class="mt-3 small text-muted">Pagados: <?php echo (int) $stats['collections_paid']; ?> | Deudas: <?php echo (int) $stats['collections_pending']; ?></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row g-2">
-                    <div class="col-xl-7">
+                <div class="row g-2 mt-1">
+                    <div class="col-xl-8">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
                                 <h5 class="card-title mb-0">Cobros y pagos por mes</h5>
@@ -218,49 +274,155 @@ include('partials/html.php');
                                 <div class="chart-fixed chart-sm">
                                     <canvas id="collectionsMonthlyChart" aria-label="Cobros y pagos por mes" role="img"></canvas>
                                 </div>
-                                <div class="d-flex flex-wrap gap-2 mt-2 small text-muted">
-                                    <span><span class="fw-semibold text-primary">Cobros generados:</span> <?php echo (int) $stats['collections_total']; ?></span>
-                                    <span><span class="fw-semibold text-success">Pagos registrados:</span> <?php echo (int) $stats['collections_paid']; ?></span>
-                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-xl-5">
+                    <div class="col-xl-4">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Prioridades de hoy</h5>
-                                <span class="text-muted small">En tiempo real</span>
+                                <h5 class="card-title mb-0">Control diario</h5>
+                                <span class="text-muted small">Crítico</span>
                             </div>
-                            <div class="card-body">
-                                <div class="d-flex flex-column gap-2">
-                                    <div class="dashboard-kpi-item">
-                                        <span class="text-muted">Cobros vencidos</span>
-                                        <strong class="text-danger"><?php echo (int) $stats['overdue']; ?></strong>
-                                    </div>
-                                    <div class="dashboard-kpi-item">
-                                        <span class="text-muted">Cobros que vencen hoy</span>
-                                        <strong><?php echo (int) $stats['due_today']; ?></strong>
-                                    </div>
-                                    <div class="dashboard-kpi-item">
-                                        <span class="text-muted">Clientes con deuda activa</span>
-                                        <strong><?php echo (int) $stats['clients_with_pending']; ?></strong>
-                                    </div>
-                                    <div class="dashboard-kpi-item">
-                                        <span class="text-muted">Tasa de recuperación</span>
-                                        <strong class="text-success"><?php echo $collectionRate; ?>%</strong>
-                                    </div>
-                                </div>
+                            <div class="card-body d-flex flex-column gap-2">
+                                <div class="dashboard-kpi-item"><span class="text-muted">Cobros vencidos</span><strong class="text-danger"><?php echo (int) $stats['overdue']; ?></strong></div>
+                                <div class="dashboard-kpi-item"><span class="text-muted">Cobros que vencen hoy</span><strong><?php echo (int) $stats['due_today']; ?></strong></div>
+                                <div class="dashboard-kpi-item"><span class="text-muted">Clientes con deuda</span><strong><?php echo (int) $stats['clients_with_pending']; ?></strong></div>
+                                <div class="dashboard-kpi-item"><span class="text-muted">Monto ya recaudado</span><strong class="text-success"><?php echo $moneyFormatter($stats['paid_amount']); ?></strong></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row g-2">
+                <div class="row g-2 mt-1">
+                    <div class="col-xl-6">
+                        <div class="card border-0 shadow-sm h-100 dashboard-card">
+                            <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
+                                <h5 class="card-title mb-0">Próximos pagos probables (7 días)</h5>
+                                <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php">Gestionar</a>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($probablePayments)) : ?>
+                                    <div class="text-muted">No hay pagos probables para los próximos 7 días.</div>
+                                <?php else : ?>
+                                    <div class="list-group list-group-flush">
+                                        <?php foreach ($probablePayments as $row) : ?>
+                                            <div class="list-group-item px-0">
+                                                <div class="d-flex justify-content-between gap-2">
+                                                    <div>
+                                                        <div class="fw-semibold"><?php echo htmlspecialchars($row['cliente'] ?: 'Cliente sin nombre', ENT_QUOTES, 'UTF-8'); ?></div>
+                                                        <div class="text-muted small"><?php echo htmlspecialchars($row['servicio'], ENT_QUOTES, 'UTF-8'); ?> · Ref: <?php echo htmlspecialchars($row['referencia'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></div>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <div class="badge text-bg-light"><?php echo htmlspecialchars((string) $row['fecha_cobro'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                        <div class="small mt-1"><?php echo $moneyFormatter((float) $row['monto']); ?></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="card border-0 shadow-sm h-100 dashboard-card">
+                            <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
+                                <h5 class="card-title mb-0">Pagos realizados</h5>
+                                <a class="btn btn-sm btn-outline-primary" href="cobros-pagos.php">Ver todos</a>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($recentPayments)) : ?>
+                                    <div class="text-muted">Aún no hay pagos registrados.</div>
+                                <?php else : ?>
+                                    <div class="list-group list-group-flush">
+                                        <?php foreach ($recentPayments as $payment) : ?>
+                                            <div class="list-group-item px-0">
+                                                <div class="d-flex justify-content-between gap-2">
+                                                    <div>
+                                                        <div class="fw-semibold"><?php echo htmlspecialchars($payment['cliente'] ?: 'Cliente sin nombre', ENT_QUOTES, 'UTF-8'); ?></div>
+                                                        <div class="text-muted small"><?php echo htmlspecialchars($payment['servicio'], ENT_QUOTES, 'UTF-8'); ?> · <?php echo htmlspecialchars($payment['metodo'] ?: 'Sin método', ENT_QUOTES, 'UTF-8'); ?></div>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <span class="badge text-bg-success"><?php echo $moneyFormatter((float) $payment['monto']); ?></span>
+                                                        <div class="text-muted small mt-1"><?php echo htmlspecialchars((string) $payment['fecha_pago'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mt-1">
+                    <div class="col-xl-6">
+                        <div class="card border-0 shadow-sm h-100 dashboard-card">
+                            <div class="card-header bg-transparent border-0">
+                                <h5 class="card-title mb-0">Servicios más pagados</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($paidServices)) : ?>
+                                    <div class="text-muted">Aún no hay servicios pagados.</div>
+                                <?php else : ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead>
+                                                <tr><th>Servicio</th><th class="text-end">Cobros</th><th class="text-end">Monto</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($paidServices as $row) : ?>
+                                                    <tr>
+                                                        <td><?php echo htmlspecialchars($row['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td class="text-end"><?php echo (int) $row['total_cobros']; ?></td>
+                                                        <td class="text-end text-success"><?php echo $moneyFormatter((float) $row['total_monto']); ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-6">
+                        <div class="card border-0 shadow-sm h-100 dashboard-card">
+                            <div class="card-header bg-transparent border-0">
+                                <h5 class="card-title mb-0">Servicios con deuda</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($debtServices)) : ?>
+                                    <div class="text-muted">No hay deudas pendientes por servicio.</div>
+                                <?php else : ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm align-middle mb-0">
+                                            <thead>
+                                                <tr><th>Servicio</th><th class="text-end">Cobros</th><th class="text-end">Deuda</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($debtServices as $row) : ?>
+                                                    <tr>
+                                                        <td><?php echo htmlspecialchars($row['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td class="text-end"><?php echo (int) $row['total_cobros']; ?></td>
+                                                        <td class="text-end text-warning"><?php echo $moneyFormatter((float) $row['total_monto']); ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mt-1">
                     <div class="col-12">
                         <div class="card border-0 shadow-sm h-100 dashboard-card">
                             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Cobros pendientes próximos</h5>
-                                <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php">Ver cobros</a>
+                                <h5 class="card-title mb-0">Cobros pendientes generales</h5>
+                                <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php">Ver todos</a>
                             </div>
                             <div class="card-body">
                                 <?php if (empty($upcomingCollections)) : ?>
@@ -275,9 +437,7 @@ include('partials/html.php');
                                                         <div class="text-muted small">Referencia: <?php echo htmlspecialchars($collection['referencia'] ?: 'Sin referencia', ENT_QUOTES, 'UTF-8'); ?></div>
                                                     </div>
                                                     <div class="text-end">
-                                                        <div class="badge text-bg-light">
-                                                            <?php echo htmlspecialchars($collection['fecha_cobro'], ENT_QUOTES, 'UTF-8'); ?>
-                                                        </div>
+                                                        <div class="badge text-bg-light"><?php echo htmlspecialchars((string) $collection['fecha_cobro'], ENT_QUOTES, 'UTF-8'); ?></div>
                                                         <div class="text-muted small mt-1"><?php echo $moneyFormatter((float) $collection['monto']); ?></div>
                                                     </div>
                                                 </div>
@@ -289,52 +449,13 @@ include('partials/html.php');
                         </div>
                     </div>
                 </div>
-
-                <div class="row g-2">
-                    <div class="col-12">
-                        <div class="card border-0 shadow-sm dashboard-card">
-                            <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0">
-                                <h5 class="card-title mb-0">Pagos recientes</h5>
-                                <a class="btn btn-sm btn-outline-primary" href="cobros-pagos.php">Ver pagos</a>
-                            </div>
-                            <div class="card-body">
-                                <?php if (empty($recentPayments)) : ?>
-                                    <div class="text-muted">Aún no hay pagos registrados.</div>
-                                <?php else : ?>
-                                    <div class="list-group list-group-flush">
-                                        <?php foreach ($recentPayments as $payment) : ?>
-                                            <div class="list-group-item px-0">
-                                                <div class="d-flex align-items-start justify-content-between gap-2">
-                                                    <div>
-                                                        <div class="fw-semibold"><?php echo htmlspecialchars($payment['cliente'] ?: 'Cliente sin nombre', ENT_QUOTES, 'UTF-8'); ?></div>
-                                                        <div class="text-muted small">
-                                                            Método: <?php echo htmlspecialchars($payment['metodo'] ?: 'Sin método', ENT_QUOTES, 'UTF-8'); ?>
-                                                        </div>
-                                                    </div>
-                                                    <span class="badge text-bg-success"><?php echo $moneyFormatter((float) $payment['monto']); ?></span>
-                                                </div>
-                                                <div class="text-muted small mt-1">Fecha: <?php echo htmlspecialchars($payment['fecha_pago'], ENT_QUOTES, 'UTF-8'); ?></div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
-            <!-- container -->
 
             <?php include('partials/footer.php'); ?>
 
         </div>
 
-        <!-- ============================================================== -->
-        <!-- End of Main Content -->
-        <!-- ============================================================== -->
-
     </div>
-    <!-- END wrapper -->
 
     <?php include('partials/customizer.php'); ?>
 
@@ -369,8 +490,14 @@ include('partials/html.php');
             box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
         }
 
-        .progress-sm {
-            height: 6px;
+        .dashboard-kpi-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #edf1f7;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
         }
 
         .dashboard-kpi-item {
@@ -392,27 +519,13 @@ include('partials/html.php');
             height: 220px;
         }
 
-        .chart-md {
-            height: 260px;
-        }
-
-        .chart-lg {
-            height: 280px;
-        }
-
         @media (max-width: 767.98px) {
-            .dashboard-stat {
-                margin-bottom: 0;
-            }
-
             .dashboard-stat-col {
                 flex: 0 0 auto;
                 width: 50%;
             }
 
-            .chart-sm,
-            .chart-md,
-            .chart-lg {
+            .chart-sm {
                 height: 220px;
             }
         }
@@ -431,8 +544,7 @@ include('partials/html.php');
                     type: 'line',
                     data: {
                         labels: monthlyLabels,
-                        datasets: [
-                            {
+                        datasets: [{
                                 label: 'Cobros',
                                 data: collectionsSeries,
                                 borderColor: '#0d6efd',
@@ -478,7 +590,6 @@ include('partials/html.php');
                     },
                 });
             }
-
         });
     </script>
 
