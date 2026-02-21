@@ -59,6 +59,32 @@ function render_template(string $template, array $data): string
     return strtr($template, $data);
 }
 
+function parse_recipient_emails(?string $raw): array
+{
+    $raw = trim((string) $raw);
+    if ($raw === '') {
+        return [];
+    }
+
+    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
+    $emails = [];
+    foreach ($parts as $email) {
+        $email = trim($email);
+        if ($email === '') {
+            continue;
+        }
+        $email = mb_strtolower($email, 'UTF-8');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+        if (!in_array($email, $emails, true)) {
+            $emails[] = $email;
+        }
+    }
+
+    return $emails;
+}
+
 function append_payment_button(string $bodyHtml, string $link): string
 {
     if ($link === '') {
@@ -139,6 +165,31 @@ try {
         }
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_avisos' && verify_csrf($_POST['csrf_token'] ?? null)) {
+        $cobroId = (int) ($_POST['id'] ?? 0);
+        $returnUrl = trim($_POST['return_url'] ?? 'cobros-avisos.php');
+        $allowedReturn = ['cobros-avisos.php', 'cobros-servicios-registros.php'];
+
+        if (!in_array($returnUrl, $allowedReturn, true)) {
+            $returnUrl = 'cobros-avisos.php';
+        }
+
+        if ($cobroId <= 0) {
+            $errorMessage = 'No se pudo identificar el registro de avisos a eliminar.';
+        } else {
+            $stmtDeleteAvisos = db()->prepare('UPDATE cobros_servicios
+                                              SET fecha_primer_aviso = NULL,
+                                                  fecha_segundo_aviso = NULL,
+                                                  fecha_tercer_aviso = NULL,
+                                                  aviso_1_enviado_at = NULL,
+                                                  aviso_2_enviado_at = NULL,
+                                                  aviso_3_enviado_at = NULL
+                                              WHERE id = ?');
+            $stmtDeleteAvisos->execute([$cobroId]);
+            redirect($returnUrl . '?deleted=1');
+        }
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_aviso' && verify_csrf($_POST['csrf_token'] ?? null)) {
         $cobroId = (int) ($_POST['id'] ?? 0);
         $tipo = trim($_POST['tipo'] ?? '');
@@ -174,10 +225,12 @@ try {
             $stmtCobro->execute([$cobroId]);
             $cobro = $stmtCobro->fetch();
 
+            $recipientEmails = $cobro ? parse_recipient_emails((string) ($cobro['cliente_correo'] ?? '')) : [];
+
             if (!$cobro) {
                 $errorMessage = 'El cobro seleccionado no existe.';
-            } elseif (empty($cobro['cliente_correo'])) {
-                $errorMessage = 'El cliente no tiene correo configurado.';
+            } elseif (empty($recipientEmails)) {
+                $errorMessage = 'El cliente no tiene correos válidos configurados.';
             } else {
                 $fechaAviso = null;
                 $sentColumn = null;
@@ -209,13 +262,31 @@ try {
                     $subject = render_template($template['subject'], $data);
                     $bodyHtml = render_template($template['body_html'], $data);
                     $bodyHtml = append_payment_button($bodyHtml, (string) ($cobro['link_boton_pago'] ?? ''));
+                    $subjectEncoded = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+                    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
+                    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
                     $headers = [
                         'MIME-Version: 1.0',
                         'Content-type: text/html; charset=UTF-8',
-                        'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
+                        'Content-Transfer-Encoding: 8bit',
+                        'Date: ' . date(DATE_RFC2822),
+                        'Message-ID: ' . $messageId,
+                        'From: ' . $displayName . ' <' . $fromEmail . '>',
+                        'Reply-To: ' . $fromEmail,
+                        'Return-Path: ' . $fromEmail,
+                        'X-Mailer: PHP/' . phpversion(),
+                        'X-Auto-Response-Suppress: OOF, AutoReply',
                     ];
 
-                    if (@mail($cobro['cliente_correo'], $subject, $bodyHtml, implode("\r\n", $headers))) {
+                    $mailSent = true;
+                    foreach ($recipientEmails as $recipientEmail) {
+                        if (!@mail($recipientEmail, $subjectEncoded, $bodyHtml, implode("\r\n", $headers))) {
+                            $mailSent = false;
+                            break;
+                        }
+                    }
+
+                    if ($mailSent) {
                         if ($sentColumn !== null) {
                             $stmtUpdate = db()->prepare("UPDATE cobros_servicios SET {$sentColumn} = NOW() WHERE id = ?");
                             $stmtUpdate->execute([$cobroId]);
@@ -294,6 +365,10 @@ try {
                     <div class="alert alert-success"><?php echo htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8'); ?></div>
                 <?php endif; ?>
 
+                <?php if (($_GET['deleted'] ?? '') === '1') : ?>
+                    <div class="alert alert-success">Avisos registrados eliminados correctamente.</div>
+                <?php endif; ?>
+
                 <div class="card">
                     <div class="card-header d-flex align-items-center justify-content-between gap-2">
                         <div>
@@ -310,6 +385,7 @@ try {
                                         <th>Cliente</th>
                                         <th>Servicio</th>
                                         <th>Referencia</th>
+                                        <th class="text-end">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -357,9 +433,18 @@ try {
                                                 </td>
                                                 <td><?php echo htmlspecialchars($servicio, ENT_QUOTES, 'UTF-8'); ?></td>
                                                 <td><?php echo htmlspecialchars($referencia, ENT_QUOTES, 'UTF-8'); ?></td>
+                                                <td class="text-end">
+                                                    <form method="post" onsubmit="return confirm('¿Eliminar todos los avisos registrados de este cobro?');" class="d-inline-block">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                        <input type="hidden" name="action" value="delete_avisos">
+                                                        <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
+                                                        <input type="hidden" name="return_url" value="cobros-avisos.php">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar avisos</button>
+                                                    </form>
+                                                </td>
                                             </tr>
                                             <tr class="table-light">
-                                                <td colspan="3">
+                                                <td colspan="4">
                                                     <div class="d-flex flex-column gap-1">
                                                         <?php foreach ($avisos as $aviso) : ?>
                                                             <?php

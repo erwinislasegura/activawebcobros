@@ -64,6 +64,26 @@ function color_por_codigo(string $codigo): string
     return '#' . substr(md5($codigo), 0, 6);
 }
 
+function normalize_email_list(string $raw): array
+{
+    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
+    $emails = [];
+    foreach ($parts as $email) {
+        $email = trim($email);
+        if ($email === '') {
+            continue;
+        }
+        $lower = mb_strtolower($email, 'UTF-8');
+        if (!filter_var($lower, FILTER_VALIDATE_EMAIL)) {
+            return [];
+        }
+        if (!in_array($lower, $emails, true)) {
+            $emails[] = $lower;
+        }
+    }
+    return $emails;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
     if ($deleteId > 0) {
@@ -95,7 +115,8 @@ if (isset($_GET['id'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_csrf($_POST['csrf_token'] ?? null)) {
     $nombre = trim($_POST['nombre'] ?? '');
-    $correo = trim($_POST['correo'] ?? '');
+    $correoInput = trim($_POST['correo'] ?? '');
+    $correos = $correoInput !== '' ? normalize_email_list($correoInput) : [];
     $telefono = trim($_POST['telefono'] ?? '');
     $direccion = trim($_POST['direccion'] ?? '');
     $sitioWeb = trim($_POST['sitio_web'] ?? '');
@@ -104,6 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     if ($nombre === '') {
         $errors[] = 'El nombre del cliente es obligatorio.';
     }
+    if ($correoInput !== '' && empty($correos)) {
+        $errors[] = 'Ingresa uno o más correos válidos separados por coma.';
+    }
 
     if (empty($errors)) {
         try {
@@ -111,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
                 $stmt = db()->prepare('UPDATE clientes SET nombre = ?, correo = ?, telefono = ?, direccion = ?, sitio_web = ?, estado = ? WHERE id = ?');
                 $stmt->execute([
                     $nombre,
-                    $correo !== '' ? $correo : null,
+                    $correoInput !== '' ? implode(', ', $correos) : null,
                     $telefono !== '' ? $telefono : null,
                     $direccion !== '' ? $direccion : null,
                     $sitioWeb !== '' ? $sitioWeb : null,
@@ -134,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
                 $stmt->execute([
                     $codigo,
                     $nombre,
-                    $correo !== '' ? $correo : null,
+                    $correoInput !== '' ? implode(', ', $correos) : null,
                     $telefono !== '' ? $telefono : null,
                     $direccion !== '' ? $direccion : null,
                     $sitioWeb !== '' ? $sitioWeb : null,
@@ -215,8 +239,9 @@ try {
                                             <input type="text" id="cliente-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="form-label" for="cliente-correo">Correo</label>
-                                            <input type="email" id="cliente-correo" name="correo" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['correo'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <label class="form-label" for="cliente-correo">Correos</label>
+                                            <input type="text" id="cliente-correo" name="correo" class="form-control" placeholder="correo1@dominio.cl, correo2@dominio.cl" value="<?php echo htmlspecialchars($clienteEdit['correo'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <div class="form-text">Puedes ingresar más de un correo separado por coma.</div>
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label" for="cliente-telefono">Teléfono</label>
