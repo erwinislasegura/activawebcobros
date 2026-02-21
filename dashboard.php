@@ -500,6 +500,16 @@ include('partials/html.php');
             background: #fff;
         }
 
+        .dashboard-kpi-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #edf1f7;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+        }
+
         .chart-fixed {
             position: relative;
             width: 100%;
