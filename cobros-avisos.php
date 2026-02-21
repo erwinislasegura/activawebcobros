@@ -139,6 +139,31 @@ try {
         }
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_avisos' && verify_csrf($_POST['csrf_token'] ?? null)) {
+        $cobroId = (int) ($_POST['id'] ?? 0);
+        $returnUrl = trim($_POST['return_url'] ?? 'cobros-avisos.php');
+        $allowedReturn = ['cobros-avisos.php', 'cobros-servicios-registros.php'];
+
+        if (!in_array($returnUrl, $allowedReturn, true)) {
+            $returnUrl = 'cobros-avisos.php';
+        }
+
+        if ($cobroId <= 0) {
+            $errorMessage = 'No se pudo identificar el registro de avisos a eliminar.';
+        } else {
+            $stmtDeleteAvisos = db()->prepare('UPDATE cobros_servicios
+                                              SET fecha_primer_aviso = NULL,
+                                                  fecha_segundo_aviso = NULL,
+                                                  fecha_tercer_aviso = NULL,
+                                                  aviso_1_enviado_at = NULL,
+                                                  aviso_2_enviado_at = NULL,
+                                                  aviso_3_enviado_at = NULL
+                                              WHERE id = ?');
+            $stmtDeleteAvisos->execute([$cobroId]);
+            redirect($returnUrl . '?deleted=1');
+        }
+    }
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_aviso' && verify_csrf($_POST['csrf_token'] ?? null)) {
         $cobroId = (int) ($_POST['id'] ?? 0);
         $tipo = trim($_POST['tipo'] ?? '');
@@ -294,6 +319,10 @@ try {
                     <div class="alert alert-success"><?php echo htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8'); ?></div>
                 <?php endif; ?>
 
+                <?php if (($_GET['deleted'] ?? '') === '1') : ?>
+                    <div class="alert alert-success">Avisos registrados eliminados correctamente.</div>
+                <?php endif; ?>
+
                 <div class="card">
                     <div class="card-header d-flex align-items-center justify-content-between gap-2">
                         <div>
@@ -310,6 +339,7 @@ try {
                                         <th>Cliente</th>
                                         <th>Servicio</th>
                                         <th>Referencia</th>
+                                        <th class="text-end">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -357,9 +387,18 @@ try {
                                                 </td>
                                                 <td><?php echo htmlspecialchars($servicio, ENT_QUOTES, 'UTF-8'); ?></td>
                                                 <td><?php echo htmlspecialchars($referencia, ENT_QUOTES, 'UTF-8'); ?></td>
+                                                <td class="text-end">
+                                                    <form method="post" onsubmit="return confirm('¿Eliminar todos los avisos registrados de este cobro?');" class="d-inline-block">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                        <input type="hidden" name="action" value="delete_avisos">
+                                                        <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
+                                                        <input type="hidden" name="return_url" value="cobros-avisos.php">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar avisos</button>
+                                                    </form>
+                                                </td>
                                             </tr>
                                             <tr class="table-light">
-                                                <td colspan="3">
+                                                <td colspan="4">
                                                     <div class="d-flex flex-column gap-1">
                                                         <?php foreach ($avisos as $aviso) : ?>
                                                             <?php
