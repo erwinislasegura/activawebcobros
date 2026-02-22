@@ -417,6 +417,39 @@ CREATE TABLE `pagos_clientes` (
   UNIQUE KEY `uniq_pagos_cobro` (`cobro_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+
+CREATE TABLE `email_accounts` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `in_email` VARCHAR(150) NOT NULL,
+  `in_password` VARCHAR(255) NOT NULL,
+  `in_host` VARCHAR(150) NOT NULL,
+  `in_port` INT UNSIGNED NOT NULL DEFAULT 993,
+  `in_security` VARCHAR(20) NOT NULL DEFAULT 'ssl',
+  `out_email` VARCHAR(150) NOT NULL,
+  `out_name` VARCHAR(150) DEFAULT NULL,
+  `out_password` VARCHAR(255) NOT NULL,
+  `out_host` VARCHAR(150) NOT NULL,
+  `out_port` INT UNSIGNED NOT NULL DEFAULT 587,
+  `out_security` VARCHAR(20) NOT NULL DEFAULT 'tls',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE `email_messages` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `box` VARCHAR(30) NOT NULL,
+  `recipient` VARCHAR(150) DEFAULT NULL,
+  `subject` VARCHAR(255) NOT NULL,
+  `body_html` MEDIUMTEXT NOT NULL,
+  `status` VARCHAR(30) NOT NULL DEFAULT 'draft',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_email_messages_box` (`box`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `email_accounts` (`in_email`, `in_password`, `in_host`, `in_port`, `in_security`, `out_email`, `out_name`, `out_password`, `out_host`, `out_port`, `out_security`)
+VALUES ('email.entrada@municipalidad.cl', 'cambiar_password', 'imap.gmail.com', 993, 'ssl', 'email.salida@municipalidad.cl', 'Sistema Municipal', 'cambiar_password', 'smtp.gmail.com', 587, 'tls');
+
 INSERT INTO `municipalidad` (`nombre`, `rut`, `direccion`, `telefono`, `correo`, `logo_path`, `logo_inicio_path`, `color_primary`, `color_secondary`)
 VALUES ('Go Cobros', NULL, NULL, NULL, NULL, 'assets/images/logo.png', 'assets/images/logo.png', '#6658dd', '#4a81d4');
 

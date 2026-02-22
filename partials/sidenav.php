@@ -40,6 +40,32 @@
             <li class="side-nav-title mt-2" data-lang="menu-title">Flujo de cobros</li>
 
             <li class="side-nav-item">
+                <a href="#modulo-buzon" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-buzon">
+                    <span class="menu-icon"><i data-lucide="mail"></i></span>
+                    <span class="menu-text">Buzón</span>
+                    <span class="menu-arrow"></span>
+                </a>
+                <div class="collapse" id="modulo-buzon">
+                    <ul class="side-nav sub-menu">
+                        <li class="side-nav-item"><a href="email.php?folder=inbox" class="side-nav-link">Buzón entrada</a></li>
+                        <li class="side-nav-item"><a href="email.php?folder=outbox" class="side-nav-link">Buzón salida</a></li>
+                        <li class="side-nav-item"><a href="email.php?folder=sent" class="side-nav-link">Enviados</a></li>
+                        <li class="side-nav-item"><a href="email.php?folder=spam" class="side-nav-link">Spam</a></li>
+                        <li class="side-nav-item"><a href="email.php?folder=compose" class="side-nav-link">Redactar</a></li>
+                        <li class="side-nav-item">
+                            <a href="#modulo-buzon-config" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-buzon-config">Configuración <span class="menu-arrow"></span></a>
+                            <div class="collapse" id="modulo-buzon-config">
+                                <ul class="side-nav sub-menu">
+                                    <li class="side-nav-item"><a href="email-config-entrada.php" class="side-nav-link">Entrada IMAP</a></li>
+                                    <li class="side-nav-item"><a href="email-config-salida.php" class="side-nav-link">Salida SMTP</a></li>
+                                </ul>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+
+            <li class="side-nav-item">
                 <a href="calendar.php" class="side-nav-link">
                     <span class="menu-icon"><i data-lucide="calendar"></i></span>
                     <span class="menu-text">Agenda</span>
@@ -156,7 +182,7 @@
                     <div class="collapse" id="modulo-mantenedores">
                         <ul class="side-nav sub-menu">
                             <li class="side-nav-item"><a href="municipalidad.php" class="side-nav-link">Empresa</a></li>
-                            <li class="side-nav-item"><a href="notificaciones-correo.php" class="side-nav-link">Correo</a></li>
+                            <li class="side-nav-item"><a href="notificaciones-correo.php" class="side-nav-link">Correo avisos</a></li>
                             <li class="side-nav-item"><a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp</a></li>
                             <li class="side-nav-item"><a href="configuracion-avisos.php" class="side-nav-link">Plantillas avisos</a></li>
                             <li class="side-nav-item"><a href="configuracion-suspension-correo.php" class="side-nav-link">Plantilla suspensión</a></li>
