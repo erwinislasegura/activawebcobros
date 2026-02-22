@@ -52,6 +52,15 @@
                         <li class="side-nav-item"><a href="email.php?folder=sent" class="side-nav-link">Enviados</a></li>
                         <li class="side-nav-item"><a href="email.php?folder=spam" class="side-nav-link">Spam</a></li>
                         <li class="side-nav-item"><a href="email.php?folder=compose" class="side-nav-link">Redactar</a></li>
+                        <li class="side-nav-item">
+                            <a href="#modulo-buzon-config" class="side-nav-link" data-bs-toggle="collapse" aria-expanded="false" aria-controls="modulo-buzon-config">Configuración <span class="menu-arrow"></span></a>
+                            <div class="collapse" id="modulo-buzon-config">
+                                <ul class="side-nav sub-menu">
+                                    <li class="side-nav-item"><a href="email-config-entrada.php" class="side-nav-link">Entrada IMAP</a></li>
+                                    <li class="side-nav-item"><a href="email-config-salida.php" class="side-nav-link">Salida SMTP</a></li>
+                                </ul>
+                            </div>
+                        </li>
                     </ul>
                 </div>
             </li>
