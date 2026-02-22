@@ -1,843 +1,240 @@
+<?php
+require __DIR__ . '/app/bootstrap.php';
+require __DIR__ . '/app/email_module.php';
+
+$allowedFolders = ['inbox', 'outbox', 'sent', 'spam', 'compose'];
+$folder = strtolower(trim($_GET['folder'] ?? 'inbox'));
+if (!in_array($folder, $allowedFolders, true)) {
+    $folder = 'inbox';
+}
+
+$config = email_get_account_config();
+$errors = [];
+$warnings = [];
+$success = null;
+
+if (isset($_GET['action'], $_GET['uid']) && in_array($folder, ['inbox', 'sent', 'spam'], true)) {
+    $uid = (int) $_GET['uid'];
+    if ($_GET['action'] === 'mark_read') {
+        $warning = email_mark_seen($config, $folder, $uid, true);
+        if ($warning) {
+            $warnings[] = $warning;
+        }
+    }
+    if ($_GET['action'] === 'mark_unread') {
+        $warning = email_mark_seen($config, $folder, $uid, false);
+        if ($warning) {
+            $warnings[] = $warning;
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'compose_send' || $action === 'compose_draft') {
+        $recipient = trim($_POST['recipient'] ?? '');
+        $subject = trim($_POST['subject'] ?? '');
+        $body = trim($_POST['body'] ?? '');
+        $subject = $subject !== '' ? $subject : '(Sin asunto)';
+
+        if ($action === 'compose_draft') {
+            email_local_store('draft', $recipient, $subject, $body, 'draft');
+            $success = 'Guardado en borradores.';
+            $folder = 'outbox';
+        } else {
+            if ($recipient === '') {
+                $errors[] = 'Debes indicar un destinatario.';
+            }
+            if (empty($errors)) {
+                $fromEmail = $config['out_email'] ?: ($config['in_email'] ?? '');
+                $fromName = $config['out_name'] ?: 'Sistema';
+                $headers = [
+                    'MIME-Version: 1.0',
+                    'Content-type: text/html; charset=UTF-8',
+                    'From: ' . $fromName . ' <' . $fromEmail . '>',
+                ];
+                $sent = @mail($recipient, $subject, $body, implode("\r\n", $headers));
+                if ($sent) {
+                    email_local_store('sent', $recipient, $subject, $body, 'sent');
+                    $success = 'Correo enviado correctamente.';
+                    $folder = 'sent';
+                } else {
+                    email_local_store('outbox', $recipient, $subject, $body, 'error_envio');
+                    $warnings[] = 'No se pudo enviar; quedó en Buzón salida.';
+                    $folder = 'outbox';
+                }
+            }
+        }
+    }
+}
+
+$folderLabels = [
+    'inbox' => 'Buzón entrada',
+    'outbox' => 'Buzón salida',
+    'sent' => 'Enviados',
+    'spam' => 'Spam',
+    'compose' => 'Redactar',
+];
+
+$search = trim($_GET['q'] ?? '');
+$selectedUid = isset($_GET['uid']) ? (int) $_GET['uid'] : 0;
+$selectedLocalId = isset($_GET['local_id']) ? (int) $_GET['local_id'] : 0;
+
+$imapData = ['emails' => [], 'warning' => null];
+$localMessages = [];
+$selectedMessage = null;
+
+if (in_array($folder, ['inbox', 'sent', 'spam'], true)) {
+    $imapData = email_fetch_messages($config, $folder);
+    if ($imapData['warning']) {
+        $warnings[] = $imapData['warning'];
+    }
+
+    if ($search !== '') {
+        $imapData['emails'] = array_values(array_filter($imapData['emails'], static function ($message) use ($search) {
+            $haystack = mb_strtolower($message['subject'] . ' ' . $message['from'] . ' ' . $message['to'], 'UTF-8');
+            return mb_strpos($haystack, mb_strtolower($search, 'UTF-8')) !== false;
+        }));
+    }
+
+    if ($selectedUid > 0) {
+        $detail = email_fetch_message_detail($config, $folder, $selectedUid);
+        if ($detail['warning']) {
+            $warnings[] = $detail['warning'];
+        }
+        $selectedMessage = $detail['message'];
+    }
+}
+
+if ($folder === 'outbox') {
+    $localMessages = array_merge(email_local_list('outbox'), email_local_list('draft'));
+    if ($search !== '') {
+        $localMessages = array_values(array_filter($localMessages, static function ($row) use ($search) {
+            $haystack = mb_strtolower(($row['subject'] ?? '') . ' ' . ($row['recipient'] ?? ''), 'UTF-8');
+            return mb_strpos($haystack, mb_strtolower($search, 'UTF-8')) !== false;
+        }));
+    }
+    if ($selectedLocalId > 0) {
+        $selectedMessage = email_local_get($selectedLocalId);
+    }
+}
+?>
 <?php include('partials/html.php'); ?>
-
 <head>
-    <?php $title = "Inbox"; include('partials/title-meta.php'); ?>
-
+    <?php $title = 'Email - ' . $folderLabels[$folder]; include('partials/title-meta.php'); ?>
     <?php include('partials/head-css.php'); ?>
+    <style>
+        .email-rendered{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+        .email-rendered img{max-width:100%;height:auto}
+        .email-rendered pre{white-space:pre-wrap;word-break:break-word}
+        .email-rendered table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
+        .email-rendered td,.email-rendered th{border:1px solid #e5e7eb;padding:6px;vertical-align:top}
+        .message-list .list-group-item.active{background:#f1f5f9;border-color:#e2e8f0;color:#0f172a}
+    </style>
 </head>
-
 <body>
-<!-- Begin page -->
 <div class="wrapper">
-
     <?php include('partials/menu.php'); ?>
 
-    <!-- ============================================================== -->
-    <!-- Start Main Content -->
-    <!-- ============================================================== -->
-
     <div class="content-page">
-
         <div class="container-fluid">
+            <?php $subtitle = 'Módulo Buzón'; $title = $folderLabels[$folder]; include('partials/page-title.php'); ?>
 
-            <?php $subtitle = "Apps"; $title = "Email"; include('partials/page-title.php'); ?>
+            <?php if ($success) : ?><div class="alert alert-success"><?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
+            <?php foreach ($errors as $e) : ?><div class="alert alert-danger"><?php echo htmlspecialchars($e, ENT_QUOTES, 'UTF-8'); ?></div><?php endforeach; ?>
+            <?php foreach ($warnings as $w) : ?><div class="alert alert-warning"><?php echo htmlspecialchars($w, ENT_QUOTES, 'UTF-8'); ?></div><?php endforeach; ?>
 
-            <div class="outlook-box gap-1 email-app">
-                <div class="offcanvas-lg offcanvas-start outlook-left-menu outlook-left-menu-sm" tabindex="-1"
-                     id="emailSidebaroffcanvas">
-                    <div class="card h-100 mb-0 rounded-end-0" data-simplebar>
-                        <div class="card-body">
-                            <a href="email-compose.php" class="btn btn-danger fw-medium w-100">Compose</a>
-
-                            <div class="list-group list-group-flush list-custom mt-3">
-                                <a href="email.php" class="list-group-item list-group-item-action active">
-                                    <i class="ti ti-inbox me-1 opacity-75 fs-lg align-middle"></i>
-                                    <span class="align-middle">Inbox</span>
-                                    <span class="badge align-middle bg-danger-subtle fs-xxs text-danger float-end">21</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-send align-middle me-1 opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Sent</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-star align-middle me-1 opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Starred</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-clock align-middle me-1 opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Scheduled</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-pencil align-middle me-1 opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Drafts</span>
-                                    <span class="badge align-middle bg-secondary-subtle text-secondary fs-xxs float-end">9</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-alert-circle align-middle me-1 opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Important</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-ban me-1 align-middle opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Spam</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-trash me-1 align-middle opacity-75 fs-lg"></i>
-                                    <span class="align-middle">Trash</span>
-                                </a>
-
-                                <div class="list-group-item mt-2">
-                                    <span class="align-middle">Labels</span>
-                                </div>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-chart-donut-filled me-1 align-middle fs-sm text-primary"></i>
-                                    <span class="align-middle">Business</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-chart-donut-filled me-1 align-middle fs-sm text-secondary"></i>
-                                    <span class="align-middle">Personal</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-chart-donut-filled me-1 align-middle fs-sm text-info"></i>
-                                    <span class="align-middle">Friends</span>
-                                </a>
-
-                                <a href="javascript: void(0);" class="list-group-item list-group-item-action">
-                                    <i class="ti ti-chart-donut-filled me-1 align-middle fs-sm text-warning"></i>
-                                    <span class="align-middle">Family</span>
-                                </a>
-                            </div>
-
-                        </div> <!-- end card-body-->
-                    </div> <!-- end card-->
+            <div class="card mb-3">
+                <div class="card-body d-flex flex-wrap gap-2">
+                    <a class="btn btn-sm <?php echo $folder === 'inbox' ? 'btn-primary' : 'btn-outline-primary'; ?>" href="email.php?folder=inbox">Entrada</a>
+                    <a class="btn btn-sm <?php echo $folder === 'outbox' ? 'btn-primary' : 'btn-outline-primary'; ?>" href="email.php?folder=outbox">Salida</a>
+                    <a class="btn btn-sm <?php echo $folder === 'sent' ? 'btn-primary' : 'btn-outline-primary'; ?>" href="email.php?folder=sent">Enviados</a>
+                    <a class="btn btn-sm <?php echo $folder === 'spam' ? 'btn-primary' : 'btn-outline-primary'; ?>" href="email.php?folder=spam">Spam</a>
+                    <a class="btn btn-sm <?php echo $folder === 'compose' ? 'btn-primary' : 'btn-outline-primary'; ?>" href="email.php?folder=compose">Redactar</a>
                 </div>
+            </div>
 
-                <div data-table data-table-rows-per-page="15"
-                     class="card h-100 mb-0 rounded-start-0 flex-grow-1 border-start-0">
-                    <div class="card-header d-lg-none d-flex gap-2">
-                        <button class="btn btn-default btn-icon" type="button" data-bs-toggle="offcanvas"
-                                data-bs-target="#emailSidebaroffcanvas" aria-controls="emailSidebaroffcanvas">
-                            <i class="ti ti-menu-2 fs-lg"></i>
-                        </button>
-
-                        <div class="app-search">
-                            <input type="text" class="form-control" placeholder="Search mails...">
-                            <i data-lucide="search" class="app-search-icon text-muted"></i>
+            <?php if ($folder === 'compose') : ?>
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title mb-0">Redactar correo</h5></div>
+                    <div class="card-body">
+                        <form method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                            <div class="mb-3"><label class="form-label">Para</label><input class="form-control" type="email" name="recipient"></div>
+                            <div class="mb-3"><label class="form-label">Asunto</label><input class="form-control" type="text" name="subject"></div>
+                            <div class="mb-3"><label class="form-label">Mensaje</label><textarea class="form-control" rows="12" name="body"></textarea></div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary" type="submit" name="action" value="compose_send">Enviar</button>
+                                <button class="btn btn-outline-secondary" type="submit" name="action" value="compose_draft">Guardar borrador</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            <?php else : ?>
+                <div class="row">
+                    <div class="col-xl-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <form method="get" class="d-flex gap-2">
+                                    <input type="hidden" name="folder" value="<?php echo htmlspecialchars($folder, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input class="form-control" type="text" name="q" value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Buscar...">
+                                    <button class="btn btn-light" type="submit">Buscar</button>
+                                </form>
+                            </div>
+                            <div class="list-group list-group-flush message-list" style="max-height:65vh;overflow:auto;">
+                                <?php if (in_array($folder, ['inbox','sent','spam'], true)) : ?>
+                                    <?php if (empty($imapData['emails'])) : ?>
+                                        <div class="p-3 text-muted">No hay correos en esta carpeta.</div>
+                                    <?php else : foreach ($imapData['emails'] as $mail) : ?>
+                                        <a class="list-group-item list-group-item-action <?php echo $selectedUid === (int) $mail['uid'] ? 'active' : ''; ?>" href="email.php?folder=<?php echo urlencode($folder); ?>&uid=<?php echo (int) $mail['uid']; ?>&q=<?php echo urlencode($search); ?>">
+                                            <div class="fw-semibold text-truncate"><?php echo htmlspecialchars($mail['subject'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                            <div class="small text-muted text-truncate"><?php echo htmlspecialchars($mail['from'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                        </a>
+                                    <?php endforeach; endif; ?>
+                                <?php else : ?>
+                                    <?php if (empty($localMessages)) : ?>
+                                        <div class="p-3 text-muted">Sin pendientes ni borradores.</div>
+                                    <?php else : foreach ($localMessages as $msg) : ?>
+                                        <a class="list-group-item list-group-item-action <?php echo $selectedLocalId === (int) $msg['id'] ? 'active' : ''; ?>" href="email.php?folder=outbox&local_id=<?php echo (int) $msg['id']; ?>&q=<?php echo urlencode($search); ?>">
+                                            <div class="fw-semibold text-truncate"><?php echo htmlspecialchars((string) $msg['subject'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                            <div class="small text-muted text-truncate"><?php echo htmlspecialchars((string) ($msg['recipient'] ?: 'Sin destinatario'), ENT_QUOTES, 'UTF-8'); ?></div>
+                                        </a>
+                                    <?php endforeach; endif; ?>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="card-header card-bg justify-content-between">
-                        <div class="d-flex flex-wrap align-items-center gap-1">
-                            <input class="form-check-input form-check-input-light fs-14 mt-0 me-3" type="checkbox"
-                                   id="select-all-email">
-
-                            <!-- Delete -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Delete">
-                                <i class="ti ti-trash fs-lg"></i>
-                            </button>
-
-                            <!-- Mark as Read -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Mark as Read">
-                                <i class="ti ti-mail-opened fs-lg"></i>
-                            </button>
-
-                            <!-- Tag -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Tag">
-                                <i class="ti ti-tag fs-lg"></i>
-                            </button>
-
-                            <!-- Archive -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Archive">
-                                <i class="ti ti-archive fs-lg"></i>
-                            </button>
-
-                            <!-- Move to Folder -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Move to Folder">
-                                <i class="ti ti-folder fs-lg"></i>
-                            </button>
-
-                            <!-- Forward -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Forward">
-                                <i class="ti ti-arrow-forward-up fs-lg"></i>
-                            </button>
-
-                            <!-- Snooze -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Snooze">
-                                <i class="ti ti-clock-pause fs-lg"></i>
-                            </button>
-
-                            <!-- Important -->
-                            <button type="button" class="btn btn-default btn-icon btn-sm" data-bs-toggle="tooltip" data-bs-trigger="hover"
-                                    title="Mark as Important">
-                                <i class="ti ti-alert-circle fs-lg"></i>
-                            </button>
-                        </div>
-
-                        <div class="app-search d-none d-lg-inline-flex">
-                            <input data-table-search type="text" class="form-control" placeholder="Search mails...">
-                            <i data-lucide="search" class="app-search-icon text-muted"></i>
+                    <div class="col-xl-8">
+                        <div class="card">
+                            <div class="card-header"><h5 class="card-title mb-0">Detalle</h5></div>
+                            <div class="card-body" style="overflow:hidden;">
+                                <?php if ($selectedMessage) : ?>
+                                    <h5><?php echo htmlspecialchars((string) ($selectedMessage['subject'] ?? '(Sin asunto)'), ENT_QUOTES, 'UTF-8'); ?></h5>
+                                    <div class="text-muted mb-2">De: <?php echo htmlspecialchars((string) ($selectedMessage['from'] ?? ($selectedMessage['recipient'] ?? '-')), ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <?php if (isset($selectedMessage['uid'])) : ?>
+                                        <div class="mb-3 d-flex gap-2">
+                                            <a class="btn btn-sm btn-outline-secondary" href="email.php?folder=<?php echo urlencode($folder); ?>&uid=<?php echo (int) $selectedMessage['uid']; ?>&action=mark_read">Marcar leído</a>
+                                            <a class="btn btn-sm btn-outline-secondary" href="email.php?folder=<?php echo urlencode($folder); ?>&uid=<?php echo (int) $selectedMessage['uid']; ?>&action=mark_unread">Marcar no leído</a>
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="email-rendered"><?php echo $selectedMessage['body_html'] ?? nl2br(htmlspecialchars((string) ($selectedMessage['body'] ?? ''), ENT_QUOTES, 'UTF-8')); ?></div>
+                                <?php else : ?>
+                                    <div class="text-muted">Selecciona un correo para ver su contenido.</div>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
-
-                    <div class="card-body p-0" style="height: calc(100% - 100px);" data-simplebar data-simplebar-md>
-                        <div class="table-responsive">
-                            <table class="table table-hover table-select mb-0">
-                                <tbody>
-                                <tr class="position-relative">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-5.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">
-                                                Amanda Reyes
-                                            </h5>
-                                        </div>
-                                    </td>
-
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Design Review & Feedback
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">
-                                                    —
-                                                </span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    I’ve reviewed the updated UI mockups. Great work overall—just a few...
-                                                </span>
-                                    </td>
-
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">3</span>
-                                        </div>
-                                    </td>
-
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 20, 10:12 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-2.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">George Thomas</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Request for Meeting
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Are you available for a quick sync-up this week regarding the roadmap?
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">1</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 19, 4:45 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="avatar-xs">
-                                                        <span class="avatar-title text-bg-primary rounded-circle">
-                                                            L
-                                                        </span>
-                                            </div>
-                                            <h5 class="fs-base mb-0 fw-medium">Lucas Martin</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Q2 Marketing Strategy
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Here's the proposed outline for our Q2 campaign and goals...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">2</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 19, 11:30 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-6.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Sophia Lee</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Final Invoice Attached
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Attached is the invoice for the April sprint deliverables. Let me know...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">1</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 18, 6:05 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="avatar-xs">
-                                                        <span class="avatar-title text-bg-danger fw-bold rounded-circle">
-                                                            D
-                                                        </span>
-                                            </div>
-                                            <h5 class="fs-base mb-0 fw-medium">Daniel Kim</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Team Offsite Agenda
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Here’s a rough outline for the team offsite activities next month...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1 opacity-25">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">0</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 18, 1:20 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="avatar-xs">
-                                                        <span class="avatar-title bg-secondary-subtle text-secondary fw-bold rounded-circle">
-                                                            C
-                                                        </span>
-                                            </div>
-                                            <h5 class="fs-base mb-0 fw-medium">Chloe Bennett</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Welcome to the Project!
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Excited to have you on board. Let’s have a quick intro call tomorrow...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1 opacity-25">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">0</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 17, 9:18 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-6.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">James Carter</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Meeting Follow-up Notes
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Thanks for the insights today. Please find the summary and action points...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">1</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 17, 2:45 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-7.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Sophia Allen</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Project Files Delivered
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    The final batch of designs and documentation has been uploaded to the drive...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">2</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 16, 11:05 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-8.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Michael Chen</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Re: Budget Estimate
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    The budget looks good overall, but we might need to adjust the Q3 allocations...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">1</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 15, 6:28 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="avatar-xs">
-                                                        <span class="avatar-title text-bg-dark fw-bold rounded-circle">
-                                                            E
-                                                        </span>
-                                            </div>
-                                            <h5 class="fs-base mb-0 fw-medium">Emma Watson</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Collaboration Opportunity
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    I’d love to chat about a possible partnership on our upcoming launch event...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1 opacity-25">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">0</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 14, 3:59 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-10.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Daniel White</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Reschedule Request
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Can we move our call to Friday afternoon instead? Something urgent came up...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1 opacity-25">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">0</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 13, 10:20 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-3.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">James Walker</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Monthly Report Submission
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Please find the attached monthly performance report for your review...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">1</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 16, 11:42 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="avatar-xs">
-                                                        <span class="avatar-title text-bg-warning fw-bold rounded-circle">
-                                                            E
-                                                        </span>
-                                            </div>
-                                            <h5 class="fs-base mb-0 fw-medium">Emma Johnson</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Design Assets Update
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    I’ve uploaded the latest illustrations and icons to the shared folder...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1 opacity-25">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">0</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 16, 8:09 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-warning fs-xl">
-                                                <i class="ti ti-star-filled"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-9.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Noah Patel</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Updated Meeting Schedule
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Please review the adjusted times for next week's client meetings...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">2</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 15, 4:55 PM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-3.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Ava Thompson</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Client Feedback Notes
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Attached is the client feedback from last week’s demo session...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">1</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 15, 9:32 AM</p>
-                                    </td>
-                                </tr>
-
-                                <tr class="position-relative mark-as-read">
-                                    <td class="ps-3" style="width: 1%;">
-                                        <div class="d-flex gap-3">
-                                            <input class="form-check-input form-check-input-light fs-14 position-relative z-2 mt-0 email-item-check"
-                                                   type="checkbox">
-                                            <button class="btn p-0 text-muted fs-xl">
-                                                <i class="ti ti-star"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <img src="assets/images/users/user-1.jpg" alt="user avatar"
-                                                 class="avatar-xs rounded-circle">
-                                            <h5 class="fs-base mb-0 fw-medium">Liam Garcia</h5>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="email-details.php" class="link-reset fs-base fw-medium stretched-link">
-                                            Weekly Sync Meeting
-                                        </a>
-                                        <span class="d-xl-inline-block d-none">—</span>
-                                        <span class="fs-base text-muted d-xl-inline-block d-none mb-0">
-                                                    Let’s discuss blockers and updates on the current sprints in our sync...
-                                                </span>
-                                    </td>
-                                    <td style="width: 1%;">
-                                        <div class="d-flex align-items-center gap-1 opacity-25">
-                                            <i class="ti ti-paperclip"></i>
-                                            <span class="fw-semibold">0</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <p class="fs-xs text-muted mb-0 text-end pe-2">Apr 14, 3:30 PM</p>
-                                    </td>
-                                </tr>
-
-                                </tbody>
-                            </table>
-                        </div> <!-- end table responsive-->
-
-                        <div class="d-flex align-items-center justify-content-center gap-2 p-3">
-                            <strong>Loading...</strong>
-                            <div class="spinner-border spinner-border-sm text-danger" role="status"
-                                 aria-hidden="true"></div>
-                        </div>
-                    </div> <!-- end card-body-->
-                </div> <!-- end card-->
-            </div> <!-- end row-->
-
+                </div>
+            <?php endif; ?>
         </div>
-        <!-- container -->
 
         <?php include('partials/footer.php'); ?>
-
     </div>
-
-    <!-- ============================================================== -->
-    <!-- End of Main Content -->
-    <!-- ============================================================== -->
-
 </div>
-<!-- END wrapper -->
 
 <?php include('partials/customizer.php'); ?>
-
 <?php include('partials/footer-scripts.php'); ?>
-
-<script>
-    document.getElementById('select-all-email').addEventListener('change', function () {
-        const checkboxes = document.querySelectorAll('.email-item-check');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
-        });
-    });
-</script>
-
-<!-- Custom table -->
-<script src="assets/js/pages/custom-table.js"></script>
-
 </body>
-
 </html>
