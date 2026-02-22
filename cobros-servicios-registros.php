@@ -157,8 +157,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($fechaBase === '' || strtotime($fechaBase) === false) {
                 $fechaBase = date('Y-m-d');
             }
-            $fechaSegundo = date('Y-m-d', strtotime($fechaBase . ' +2 days'));
-            $fechaTercero = date('Y-m-d', strtotime($fechaBase . ' +5 days'));
+            $fechaTercero = $fechaBase;
+            $fechaSegundo = date('Y-m-d', strtotime($fechaTercero . ' -3 days'));
+            $fechaPrimero = date('Y-m-d', strtotime($fechaTercero . ' -5 days'));
 
             $insertStmt->execute([
                 (int) $asignacion['servicio_id'],
@@ -166,8 +167,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 (string) ($asignacion['cliente'] ?? 'Cliente sin nombre'),
                 referencia_unica(),
                 (float) ($asignacion['monto'] ?? 0),
-                $fechaBase,
-                $fechaBase,
+                $fechaPrimero,
+                $fechaPrimero,
                 $fechaSegundo,
                 $fechaTercero,
                 'Pendiente',
@@ -236,8 +237,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
             $autoData = $stmtAuto->fetch() ?: null;
             if ($autoData) {
                 $monto = (string) ($autoData['monto'] ?? $monto);
-                if ($fechaPrimerAviso === '') {
-                    $fechaPrimerAviso = (string) ($autoData['fecha_vencimiento'] ?? '');
+                if ($fechaTercerAviso === '') {
+                    $fechaTercerAviso = (string) ($autoData['fecha_vencimiento'] ?? '');
                 }
             }
         } catch (Exception $e) {
@@ -267,24 +268,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     if ($monto === '' || !is_numeric($monto) || (float) $monto < 0) {
         $errors[] = 'Ingresa un monto válido.';
     }
-    if ($fechaPrimerAviso === '') {
-        $errors[] = 'Selecciona la fecha del primer aviso.';
+    if ($fechaTercerAviso === '') {
+        $errors[] = 'Selecciona la fecha de vencimiento (tercer aviso).';
     }
     if ($estado === '') {
         $errors[] = 'Selecciona un estado.';
     }
 
-    if ($fechaPrimerAviso !== '') {
+    if ($fechaTercerAviso !== '') {
+        $fechaSegundoAviso = date('Y-m-d', strtotime($fechaTercerAviso . ' -3 days'));
+        $fechaPrimerAviso = date('Y-m-d', strtotime($fechaTercerAviso . ' -5 days'));
         $fechaCobro = $fechaPrimerAviso;
     } elseif ($modoSimple) {
-        $fechaPrimerAviso = date('Y-m-d');
+        $fechaTercerAviso = date('Y-m-d');
+        $fechaSegundoAviso = date('Y-m-d', strtotime($fechaTercerAviso . ' -3 days'));
+        $fechaPrimerAviso = date('Y-m-d', strtotime($fechaTercerAviso . ' -5 days'));
         $fechaCobro = $fechaPrimerAviso;
-    }
-    if ($fechaPrimerAviso !== '' && $fechaSegundoAviso === '') {
-        $fechaSegundoAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +2 days'));
-    }
-    if ($fechaPrimerAviso !== '' && $fechaTercerAviso === '') {
-        $fechaTercerAviso = date('Y-m-d', strtotime($fechaPrimerAviso . ' +5 days'));
     }
 
     if ($referencia === '') {
@@ -607,16 +606,16 @@ foreach ($cobros as $cobro) {
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label" for="cobro-primer-aviso">Fecha primer aviso</label>
-                                            <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_primer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
-                                            <small class="text-muted">La fecha de cobro se iguala al primer aviso.</small>
+                                            <input type="date" id="cobro-primer-aviso" name="fecha_primer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_primer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly>
+                                            <small class="text-muted">Se calcula automáticamente desde la fecha de vencimiento.</small>
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label" for="cobro-segundo-aviso">Fecha segundo aviso</label>
-                                            <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_segundo_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <input type="date" id="cobro-segundo-aviso" name="fecha_segundo_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_segundo_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly>
                                         </div>
                                         <div class="col-md-4">
-                                            <label class="form-label" for="cobro-tercer-aviso">Fecha tercer aviso</label>
-                                            <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_tercer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                            <label class="form-label" for="cobro-tercer-aviso">Fecha vencimiento (tercer aviso)</label>
+                                            <input type="date" id="cobro-tercer-aviso" name="fecha_tercer_aviso" class="form-control" value="<?php echo htmlspecialchars($cobroEdit['fecha_tercer_aviso'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label" for="cobro-estado">Estado</label>
@@ -831,15 +830,16 @@ foreach ($cobros as $cobro) {
             const serviciosPorCliente = <?php echo json_encode($serviciosPorCliente); ?>;
             const servicioSeleccionado = <?php echo (int) ($cobroEdit['servicio_id'] ?? 0); ?>;
 
-            function recalcularAvisosDesdeFechaBase(fechaBase) {
-                if (!fechaBase || !segundoAvisoInput || !tercerAvisoInput) {
+            function recalcularAvisosDesdeVencimiento(fechaVencimiento) {
+                if (!fechaVencimiento || !segundoAvisoInput || !tercerAvisoInput || !primerAvisoInput) {
                     return;
                 }
-                const primer = new Date(fechaBase + 'T00:00:00');
-                const segundo = new Date(primer);
-                segundo.setDate(segundo.getDate() + 2);
-                const tercero = new Date(primer);
-                tercero.setDate(tercero.getDate() + 5);
+                const tercero = new Date(fechaVencimiento + 'T00:00:00');
+                const segundo = new Date(tercero);
+                segundo.setDate(segundo.getDate() - 3);
+                const primero = new Date(tercero);
+                primero.setDate(primero.getDate() - 5);
+                primerAvisoInput.value = primero.toISOString().slice(0, 10);
                 segundoAvisoInput.value = segundo.toISOString().slice(0, 10);
                 tercerAvisoInput.value = tercero.toISOString().slice(0, 10);
             }
@@ -857,10 +857,10 @@ foreach ($cobros as $cobro) {
                 if (montoInput && monto !== '') {
                     montoInput.value = monto;
                 }
-                if (primerAvisoInput) {
-                    const fechaBase = vencimiento && vencimiento !== '-' ? vencimiento : new Date().toISOString().slice(0, 10);
-                    primerAvisoInput.value = fechaBase;
-                    recalcularAvisosDesdeFechaBase(fechaBase);
+                if (tercerAvisoInput) {
+                    const fechaVencimiento = vencimiento && vencimiento !== '-' ? vencimiento : new Date().toISOString().slice(0, 10);
+                    tercerAvisoInput.value = fechaVencimiento;
+                    recalcularAvisosDesdeVencimiento(fechaVencimiento);
                 }
             }
 
@@ -915,16 +915,12 @@ foreach ($cobros as $cobro) {
                 renderServicios(clienteSelect.value);
             }
 
-            if (servicioSelect) {
-                servicioSelect.dispatchEvent(new Event('change'));
-            }
-
-            if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {
-                primerAvisoInput.addEventListener('change', function () {
-                    if (!primerAvisoInput.value || (modoSimpleToggle && !modoSimpleToggle.checked)) {
+            if (tercerAvisoInput && segundoAvisoInput && primerAvisoInput) {
+                tercerAvisoInput.addEventListener('change', function () {
+                    if (!tercerAvisoInput.value) {
                         return;
                     }
-                    recalcularAvisosDesdeFechaBase(primerAvisoInput.value);
+                    recalcularAvisosDesdeVencimiento(tercerAvisoInput.value);
                 });
             }
 
