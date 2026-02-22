@@ -23,13 +23,33 @@ function email_decode_part(string $content, int $encoding): string
     return $content;
 }
 
+function email_get_part_parameter(object $structure, string $name): ?string
+{
+    $name = strtolower($name);
+
+    $sources = [];
+    if (!empty($structure->parameters) && is_array($structure->parameters)) {
+        $sources = array_merge($sources, $structure->parameters);
+    }
+    if (!empty($structure->dparameters) && is_array($structure->dparameters)) {
+        $sources = array_merge($sources, $structure->dparameters);
+    }
+
+    foreach ($sources as $param) {
+        $attr = strtolower((string) ($param->attribute ?? ''));
+        if ($attr === $name) {
+            return (string) ($param->value ?? '');
+        }
+    }
+
+    return null;
+}
+
 function email_extract_parts($imap, int $uid, object $structure, string $prefix = ''): array
 {
     $items = [];
 
-    $partNumber = $prefix !== '' ? $prefix : '1';
     $isMultipart = isset($structure->type) && (int) $structure->type === 1 && !empty($structure->parts);
-
     if ($isMultipart) {
         foreach ($structure->parts as $index => $part) {
             $childNumber = $prefix === '' ? (string) ($index + 1) : $prefix . '.' . ($index + 1);
@@ -38,6 +58,7 @@ function email_extract_parts($imap, int $uid, object $structure, string $prefix 
         return $items;
     }
 
+    $partNumber = $prefix !== '' ? $prefix : '1';
     $raw = imap_fetchbody($imap, (string) $uid, $partNumber, FT_UID);
     if ($raw === '' && $prefix === '') {
         $raw = imap_body($imap, (string) $uid, FT_UID);
@@ -46,29 +67,83 @@ function email_extract_parts($imap, int $uid, object $structure, string $prefix 
     $encoding = isset($structure->encoding) ? (int) $structure->encoding : 0;
     $decoded = email_decode_part($raw, $encoding);
 
+    $primaryTypes = [
+        0 => 'text',
+        1 => 'multipart',
+        2 => 'message',
+        3 => 'application',
+        4 => 'audio',
+        5 => 'image',
+        6 => 'video',
+        7 => 'other',
+    ];
+
+    $primary = $primaryTypes[(int) ($structure->type ?? 0)] ?? 'other';
     $subtype = strtolower((string) ($structure->subtype ?? 'plain'));
-    $isHtml = $subtype === 'html';
-    $mime = $isHtml ? 'text/html' : 'text/plain';
+    $mime = $primary . '/' . $subtype;
+
+    $contentId = (string) ($structure->id ?? '');
+    $contentId = trim($contentId, '<> 	
+');
+
+    $filename = email_get_part_parameter($structure, 'filename')
+        ?? email_get_part_parameter($structure, 'name')
+        ?? null;
+
+    $disposition = strtolower((string) ($structure->disposition ?? ''));
 
     $items[] = [
         'mime' => $mime,
         'content' => $decoded,
+        'content_id' => $contentId,
+        'filename' => $filename,
+        'disposition' => $disposition,
     ];
 
     return $items;
 }
 
+function email_enrich_html_with_inline_images(string $html, array $parts): string
+{
+    foreach ($parts as $part) {
+        if (str_starts_with($part['mime'], 'image/') && !empty($part['content_id']) && $part['content'] !== '') {
+            $dataUri = 'data:' . $part['mime'] . ';base64,' . base64_encode($part['content']);
+            $cid = preg_quote((string) $part['content_id'], '/');
+            $html = preg_replace('/src=["\']cid:' . $cid . '["\']/i', 'src="' . $dataUri . '"', $html) ?? $html;
+        }
+    }
+
+    return $html;
+}
+
+function email_extract_attachments(array $parts): array
+{
+    $attachments = [];
+    foreach ($parts as $part) {
+        $isAttachment = ($part['disposition'] ?? '') === 'attachment' || !empty($part['filename']);
+        if ($isAttachment && !str_starts_with((string) $part['mime'], 'text/')) {
+            $attachments[] = [
+                'filename' => $part['filename'] ?: 'adjunto',
+                'mime' => $part['mime'],
+            ];
+        }
+    }
+
+    return $attachments;
+}
+
 function email_select_best_body(array $parts): array
 {
     foreach ($parts as $part) {
-        if ($part['mime'] === 'text/html' && trim($part['content']) !== '') {
-            return ['html' => email_sanitize_html($part['content']), 'is_html' => true];
+        if (($part['mime'] ?? '') === 'text/html' && trim((string) $part['content']) !== '') {
+            $html = email_enrich_html_with_inline_images((string) $part['content'], $parts);
+            return ['html' => email_sanitize_html($html), 'is_html' => true];
         }
     }
 
     foreach ($parts as $part) {
-        if ($part['mime'] === 'text/plain' && trim($part['content']) !== '') {
-            return ['html' => nl2br(htmlspecialchars($part['content'], ENT_QUOTES, 'UTF-8')), 'is_html' => false];
+        if (($part['mime'] ?? '') === 'text/plain' && trim((string) $part['content']) !== '') {
+            return ['html' => nl2br(htmlspecialchars((string) $part['content'], ENT_QUOTES, 'UTF-8')), 'is_html' => false];
         }
     }
 
@@ -277,6 +352,7 @@ function email_fetch_message_detail(array $config, string $folder, int $uid): ar
         'seen' => !empty($overview->seen),
         'body_html' => $selectedBody['html'],
         'body_is_html' => $selectedBody['is_html'],
+        'attachments' => email_extract_attachments($parts),
     ];
 
     imap_close($imap);

@@ -219,6 +219,16 @@ if ($folder === 'outbox') {
                                             <a class="btn btn-sm btn-outline-secondary" href="email.php?folder=<?php echo urlencode($folder); ?>&uid=<?php echo (int) $selectedMessage['uid']; ?>&action=mark_unread">Marcar no leído</a>
                                         </div>
                                     <?php endif; ?>
+                                    <?php if (!empty($selectedMessage['attachments'])) : ?>
+                                        <div class="mb-3">
+                                            <div class="small text-muted mb-1">Adjuntos</div>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <?php foreach ($selectedMessage['attachments'] as $adj) : ?>
+                                                    <span class="badge bg-light text-dark border"><?php echo htmlspecialchars((string) $adj['filename'], ENT_QUOTES, 'UTF-8'); ?> · <?php echo htmlspecialchars((string) $adj['mime'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                     <div class="email-rendered"><?php echo $selectedMessage['body_html'] ?? nl2br(htmlspecialchars((string) ($selectedMessage['body'] ?? ''), ENT_QUOTES, 'UTF-8')); ?></div>
                                 <?php else : ?>
                                     <div class="text-muted">Selecciona un correo para ver su contenido.</div>
