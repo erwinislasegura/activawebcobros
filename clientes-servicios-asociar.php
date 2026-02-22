@@ -249,6 +249,8 @@ try {
         <div class="container-fluid">
             <?php $subtitle = "Clientes"; $title = "Asociar servicios a clientes"; include('partials/page-title.php'); ?>
 
+                <?php $flowCurrentStep = 'asociaciones'; include('partials/flow-quick-nav.php'); ?>
+
             <?php if ($success === '1') : ?><div class="alert alert-success">Asociación creada correctamente.</div><?php endif; ?>
             <?php if ($success === 'deleted') : ?><div class="alert alert-success">Asociación eliminada correctamente.</div><?php endif; ?>
             <?php if ($success === 'updated') : ?><div class="alert alert-success">Asociación actualizada correctamente.</div><?php endif; ?>

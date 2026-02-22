@@ -208,6 +208,8 @@ try {
 
                 <?php $subtitle = "Clientes"; $title = "Crear cliente"; include('partials/page-title.php'); ?>
 
+                <?php $flowCurrentStep = 'clientes'; include('partials/flow-quick-nav.php'); ?>
+
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Cliente guardado correctamente.</div>
                 <?php endif; ?>
