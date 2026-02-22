@@ -417,6 +417,13 @@ $moneyFormatter = static function (float $value): string {
                                             <?php endif; ?>
                                         </div>
                                         <div class="col-md-6">
+                                            <div class="border rounded p-3 bg-light">
+                                                <h6 class="mb-2">Información del servicio</h6>
+                                                <div class="small text-muted mb-1"><strong>Periodicidad:</strong> <span id="cobro-detalle-tiempo">-</span></div>
+                                                <div class="small text-muted"><strong>Vencimiento del servicio:</strong> <span id="cobro-detalle-vencimiento">-</span></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
                                             <label class="form-label" for="cobro-cliente">Cliente</label>
                                             <select id="cobro-cliente" name="cliente_id" class="form-select" required>
                                                 <option value="">Selecciona un cliente</option>
@@ -658,6 +665,8 @@ $moneyFormatter = static function (float $value): string {
             const servicioSelect = document.getElementById('cobro-servicio');
             const montoInput = document.getElementById('cobro-monto');
             const clienteSelect = document.getElementById('cobro-cliente');
+            const detalleTiempo = document.getElementById('cobro-detalle-tiempo');
+            const detalleVencimiento = document.getElementById('cobro-detalle-vencimiento');
             const primerAvisoInput = document.getElementById('cobro-primer-aviso');
             const segundoAvisoInput = document.getElementById('cobro-segundo-aviso');
             const tercerAvisoInput = document.getElementById('cobro-tercer-aviso');
@@ -702,6 +711,17 @@ $moneyFormatter = static function (float $value): string {
                 servicioSelect.addEventListener('change', function () {
                     const selected = servicioSelect.options[servicioSelect.selectedIndex];
                     const monto = selected?.dataset?.monto ?? '';
+                    if (detalleTiempo) {
+                        detalleTiempo.textContent = selected?.dataset?.tiempo ?? '-';
+                    }
+                    if (detalleVencimiento) {
+                        const raw = selected?.dataset?.vencimiento ?? '-';
+                        if (raw && raw !== '-' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+                            detalleVencimiento.textContent = new Date(raw + 'T00:00:00').toLocaleDateString('es-CL');
+                        } else {
+                            detalleVencimiento.textContent = raw;
+                        }
+                    }
                     if (monto !== '') {
                         montoInput.value = monto;
                     }
@@ -714,8 +734,14 @@ $moneyFormatter = static function (float $value): string {
                     if (montoInput) {
                         montoInput.value = '';
                     }
+                    if (detalleTiempo) detalleTiempo.textContent = '-';
+                    if (detalleVencimiento) detalleVencimiento.textContent = '-';
                 });
                 renderServicios(clienteSelect.value);
+            }
+
+            if (servicioSelect) {
+                servicioSelect.dispatchEvent(new Event('change'));
             }
 
             if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {
