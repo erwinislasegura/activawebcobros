@@ -573,6 +573,13 @@ foreach ($cobros as $cobro) {
                                             <?php endif; ?>
                                         </div>
                                         <div class="col-md-6">
+                                            <div class="border rounded p-3 bg-light">
+                                                <h6 class="mb-2">Información del servicio</h6>
+                                                <div class="small text-muted mb-1"><strong>Periodicidad:</strong> <span id="cobro-detalle-tiempo">-</span></div>
+                                                <div class="small text-muted"><strong>Vencimiento del servicio:</strong> <span id="cobro-detalle-vencimiento">-</span></div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
                                             <label class="form-label" for="cobro-cliente">Cliente</label>
                                             <select id="cobro-cliente" name="cliente_id" class="form-select" required>
                                                 <option value="">Selecciona un cliente</option>
@@ -814,6 +821,8 @@ foreach ($cobros as $cobro) {
             const servicioSelect = document.getElementById('cobro-servicio');
             const montoInput = document.getElementById('cobro-monto');
             const clienteSelect = document.getElementById('cobro-cliente');
+            const detalleTiempo = document.getElementById('cobro-detalle-tiempo');
+            const detalleVencimiento = document.getElementById('cobro-detalle-vencimiento');
             const primerAvisoInput = document.getElementById('cobro-primer-aviso');
             const segundoAvisoInput = document.getElementById('cobro-segundo-aviso');
             const tercerAvisoInput = document.getElementById('cobro-tercer-aviso');
@@ -904,6 +913,10 @@ foreach ($cobros as $cobro) {
                     aplicarModoSimpleDesdeServicio();
                 });
                 renderServicios(clienteSelect.value);
+            }
+
+            if (servicioSelect) {
+                servicioSelect.dispatchEvent(new Event('change'));
             }
 
             if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {

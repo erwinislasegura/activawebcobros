@@ -437,6 +437,14 @@ try {
                                             <input type="text" id="pago-servicio" class="form-control" readonly>
                                         </div>
                                         <div class="col-md-6">
+                                            <label class="form-label" for="pago-tiempo">Periodicidad</label>
+                                            <input type="text" id="pago-tiempo" class="form-control" readonly>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="pago-vencimiento-servicio">Vencimiento servicio</label>
+                                            <input type="text" id="pago-vencimiento-servicio" class="form-control" readonly>
+                                        </div>
+                                        <div class="col-md-6">
                                             <label class="form-label" for="pago-referencia">Referencia del cobro</label>
                                             <input type="text" id="pago-referencia" class="form-control" readonly>
                                         </div>
@@ -555,6 +563,8 @@ try {
             const cobroSelect = document.getElementById('pago-cobro');
             const clienteInput = document.getElementById('pago-cliente');
             const servicioInput = document.getElementById('pago-servicio');
+            const tiempoInput = document.getElementById('pago-tiempo');
+            const vencimientoServicioInput = document.getElementById('pago-vencimiento-servicio');
             const referenciaInput = document.getElementById('pago-referencia');
             const montoInput = document.getElementById('pago-monto');
 
@@ -568,6 +578,12 @@ try {
                 }
                 clienteInput.value = selected.getAttribute('data-cliente') || '';
                 servicioInput.value = selected.getAttribute('data-servicio') || '';
+                if (tiempoInput) {
+                    tiempoInput.value = selected.getAttribute('data-tiempo') || '-';
+                }
+                if (vencimientoServicioInput) {
+                    vencimientoServicioInput.value = selected.getAttribute('data-vencimiento') || '-';
+                }
                 referenciaInput.value = selected.getAttribute('data-referencia') || '';
                 montoInput.value = selected.getAttribute('data-monto') || '';
             }
