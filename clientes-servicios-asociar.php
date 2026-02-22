@@ -9,51 +9,8 @@ $asociacionEdit = null;
 
 function normalizar_periodicidad_servicio(string $periodicidad): string
 {
-    $periodicidad = mb_strtolower(trim($periodicidad), 'UTF-8');
-    $periodicidad = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $periodicidad);
-    return $periodicidad;
-}
-
-function calcular_fecha_vencimiento(string $fechaRegistro, string $periodicidad): ?string
-{
-    if ($fechaRegistro === '') {
-        return null;
-    }
-
-    $norm = normalizar_periodicidad_servicio($periodicidad);
-    $intervalos = [
-        'mensual' => '+1 month',
-        'bimestral' => '+2 months',
-        'trimestral' => '+3 months',
-        'semestral' => '+6 months',
-        'anual' => '+1 year',
-    ];
-
-    if (!isset($intervalos[$norm])) {
-        return null;
-    }
-
-    return date('Y-m-d', strtotime($fechaRegistro . ' ' . $intervalos[$norm]));
-}
-
-function ensure_column(string $table, string $column, string $definition): void
-{
-    $dbName = $GLOBALS['config']['db']['name'] ?? '';
-    if ($dbName === '') {
-        return;
-    }
-    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
-    $stmt->execute([$dbName, $table, $column]);
-    if ((int) $stmt->fetchColumn() === 0) {
-        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
-    }
-}
-
-
-function normalizar_periodicidad_servicio(string $periodicidad): string
-{
-    $periodicidad = mb_strtolower(trim($periodicidad), 'UTF-8');
-    $periodicidad = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $periodicidad);
+    $periodicidad = strtolower(trim($periodicidad));
+    $periodicidad = str_replace(['á', 'é', 'í', 'ó', 'ú', 'Á', 'É', 'Í', 'Ó', 'Ú'], ['a', 'e', 'i', 'o', 'u', 'a', 'e', 'i', 'o', 'u'], $periodicidad);
     return $periodicidad;
 }
 
@@ -179,8 +136,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
         if (empty($errors)) {
             try {
-                $stmtExists = db()->prepare('SELECT COUNT(*) FROM clientes_servicios WHERE cliente_id = ? AND servicio_id = ? AND id <> ?');
-                $stmtExists->execute([$clienteId, $servicioId, $asociacionId]);
+                if ($action === 'update') {
+                    $stmtExists = db()->prepare('SELECT COUNT(*) FROM clientes_servicios WHERE cliente_id = ? AND servicio_id = ? AND id <> ?');
+                    $stmtExists->execute([$clienteId, $servicioId, $asociacionId]);
+                } else {
+                    $stmtExists = db()->prepare('SELECT COUNT(*) FROM clientes_servicios WHERE cliente_id = ? AND servicio_id = ?');
+                    $stmtExists->execute([$clienteId, $servicioId]);
+                }
                 if ((int) $stmtExists->fetchColumn() > 0) {
                     $errors[] = 'Esta asociación ya existe.';
                 } else {
