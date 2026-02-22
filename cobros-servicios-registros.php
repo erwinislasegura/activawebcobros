@@ -90,6 +90,9 @@ try {
     ensure_column('cobros_servicios', 'aviso_1_enviado_at', 'DATETIME NULL');
     ensure_column('cobros_servicios', 'aviso_2_enviado_at', 'DATETIME NULL');
     ensure_column('cobros_servicios', 'aviso_3_enviado_at', 'DATETIME NULL');
+    ensure_column('clientes_servicios', 'fecha_registro', 'DATE NULL');
+    ensure_column('clientes_servicios', 'tiempo_servicio', 'VARCHAR(30) NULL');
+    ensure_column('clientes_servicios', 'fecha_vencimiento', 'DATE NULL');
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de cobros.';
 } catch (Error $e) {
@@ -268,7 +271,9 @@ try {
         'SELECT cs.cliente_id,
                 s.id,
                 s.nombre,
-                s.monto
+                s.monto,
+                cs.tiempo_servicio,
+                cs.fecha_vencimiento
          FROM clientes_servicios cs
          JOIN servicios s ON s.id = cs.servicio_id
          WHERE s.estado = 1
@@ -283,6 +288,8 @@ try {
             'id' => (int) $asignacion['id'],
             'nombre' => $asignacion['nombre'],
             'monto' => $asignacion['monto'],
+            'tiempo_servicio' => $asignacion['tiempo_servicio'],
+            'fecha_vencimiento' => $asignacion['fecha_vencimiento'],
         ];
     }
     $cobros = db()->query(
@@ -302,10 +309,13 @@ try {
                 cs.aviso_3_enviado_at,
                 cs.estado,
                 cs.created_at,
+                csa.tiempo_servicio,
+                csa.fecha_vencimiento,
                 s.nombre AS servicio
          FROM cobros_servicios cs
          LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
+         LEFT JOIN clientes_servicios csa ON csa.cliente_id = cs.cliente_id AND csa.servicio_id = cs.servicio_id
          ORDER BY cs.id DESC'
     )->fetchAll();
     $totalesCobros = db()->query(
@@ -313,14 +323,17 @@ try {
                 c.codigo AS cliente_codigo,
                 c.color_hex AS cliente_color,
                 s.nombre AS servicio,
+                csa.tiempo_servicio,
+                csa.fecha_vencimiento,
                 COUNT(cs.id) AS cobros_total,
                 SUM(cs.monto) AS monto_cobros,
                 COALESCE(SUM(p.monto), 0) AS monto_pagos
          FROM cobros_servicios cs
          LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
+         LEFT JOIN clientes_servicios csa ON csa.cliente_id = cs.cliente_id AND csa.servicio_id = cs.servicio_id
          LEFT JOIN pagos_clientes p ON p.cobro_id = cs.id
-         GROUP BY cliente, cliente_codigo, cliente_color, servicio
+         GROUP BY cliente, cliente_codigo, cliente_color, servicio, tiempo_servicio, fecha_vencimiento
          ORDER BY cliente ASC, servicio ASC'
     )->fetchAll();
 } catch (Exception $e) {
@@ -392,8 +405,8 @@ $moneyFormatter = static function (float $value): string {
                                             <select id="cobro-servicio" name="servicio_id" class="form-select" required>
                                                 <option value=""><?php echo empty($serviciosIniciales) ? 'Selecciona un cliente primero' : 'Selecciona un servicio'; ?></option>
                                                 <?php foreach ($serviciosIniciales as $servicio) : ?>
-                                                    <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars($servicio['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                    <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" data-tiempo="<?php echo htmlspecialchars((string) ($servicio['tiempo_servicio'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>" data-vencimiento="<?php echo htmlspecialchars(!empty($servicio['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $servicio['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($servicio['nombre'] . ' · ' . ($servicio['tiempo_servicio'] ?: '-') . ' · vence ' . (!empty($servicio['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $servicio['fecha_vencimiento'])) : '-'), ENT_QUOTES, 'UTF-8'); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -402,6 +415,13 @@ $moneyFormatter = static function (float $value): string {
                                             <?php elseif (empty($serviciosIniciales)) : ?>
                                                 <small class="text-muted d-block mt-2">Asigna servicios al cliente para habilitar el listado.</small>
                                             <?php endif; ?>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="border rounded p-3 bg-light">
+                                                <h6 class="mb-2">Información del servicio</h6>
+                                                <div class="small text-muted mb-1"><strong>Periodicidad:</strong> <span id="cobro-detalle-tiempo">-</span></div>
+                                                <div class="small text-muted"><strong>Vencimiento del servicio:</strong> <span id="cobro-detalle-vencimiento">-</span></div>
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label" for="cobro-cliente">Cliente</label>
@@ -478,6 +498,8 @@ $moneyFormatter = static function (float $value): string {
                                             <tr>
                                                 <th>Cliente</th>
                                                 <th>Servicio</th>
+                                                <th>Tiempo</th>
+                                                <th>Vence servicio</th>
                                                 <th>Cobros</th>
                                                 <th>Monto cobrado</th>
                                                 <th>Monto pagado</th>
@@ -487,7 +509,7 @@ $moneyFormatter = static function (float $value): string {
                                         <tbody>
                                             <?php if (empty($totalesCobros)) : ?>
                                                 <tr>
-                                                    <td colspan="6" class="text-center text-muted">No hay totales disponibles.</td>
+                                                    <td colspan="8" class="text-center text-muted">No hay totales disponibles.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($totalesCobros as $total) : ?>
@@ -504,6 +526,8 @@ $moneyFormatter = static function (float $value): string {
                                                             <?php echo htmlspecialchars($total['cliente'], ENT_QUOTES, 'UTF-8'); ?>
                                                         </td>
                                                         <td><?php echo htmlspecialchars($total['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars($total['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars(!empty($total['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $total['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo (int) ($total['cobros_total'] ?? 0); ?></td>
                                                         <td><?php echo $moneyFormatter($montoCobrado); ?></td>
                                                         <td><?php echo $moneyFormatter($montoPagado); ?></td>
@@ -538,6 +562,8 @@ $moneyFormatter = static function (float $value): string {
                                         <thead>
                                             <tr>
                                                 <th>Servicio</th>
+                                                <th>Tiempo</th>
+                                                <th>Vence servicio</th>
                                                 <th>Cliente</th>
                                                 <th>Referencia</th>
                                                 <th>Monto</th>
@@ -550,12 +576,14 @@ $moneyFormatter = static function (float $value): string {
                                         <tbody>
                                             <?php if (empty($cobros)) : ?>
                                                 <tr>
-                                                    <td colspan="8" class="text-center text-muted">No hay cobros registrados.</td>
+                                                    <td colspan="10" class="text-center text-muted">No hay cobros registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($cobros as $cobro) : ?>
                                                     <tr>
                                                         <td><?php echo htmlspecialchars($cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars($cobro['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars(!empty($cobro['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $cobro['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($cobro['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($cobro['referencia'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo $moneyFormatter((float) $cobro['monto']); ?></td>
@@ -637,6 +665,8 @@ $moneyFormatter = static function (float $value): string {
             const servicioSelect = document.getElementById('cobro-servicio');
             const montoInput = document.getElementById('cobro-monto');
             const clienteSelect = document.getElementById('cobro-cliente');
+            const detalleTiempo = document.getElementById('cobro-detalle-tiempo');
+            const detalleVencimiento = document.getElementById('cobro-detalle-vencimiento');
             const primerAvisoInput = document.getElementById('cobro-primer-aviso');
             const segundoAvisoInput = document.getElementById('cobro-segundo-aviso');
             const tercerAvisoInput = document.getElementById('cobro-tercer-aviso');
@@ -666,8 +696,10 @@ $moneyFormatter = static function (float $value): string {
                 servicios.forEach((servicio) => {
                     const option = document.createElement('option');
                     option.value = servicio.id;
-                    option.textContent = servicio.nombre;
+                    option.textContent = `${servicio.nombre} · ${servicio.tiempo_servicio || '-'} · vence ${servicio.fecha_vencimiento ? new Date(servicio.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-CL') : '-'}`;
                     option.dataset.monto = servicio.monto;
+                    option.dataset.tiempo = servicio.tiempo_servicio || '-';
+                    option.dataset.vencimiento = servicio.fecha_vencimiento || '-';
                     if (servicioSeleccionado && Number(servicioSeleccionado) === Number(servicio.id)) {
                         option.selected = true;
                     }
@@ -679,6 +711,17 @@ $moneyFormatter = static function (float $value): string {
                 servicioSelect.addEventListener('change', function () {
                     const selected = servicioSelect.options[servicioSelect.selectedIndex];
                     const monto = selected?.dataset?.monto ?? '';
+                    if (detalleTiempo) {
+                        detalleTiempo.textContent = selected?.dataset?.tiempo ?? '-';
+                    }
+                    if (detalleVencimiento) {
+                        const raw = selected?.dataset?.vencimiento ?? '-';
+                        if (raw && raw !== '-' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+                            detalleVencimiento.textContent = new Date(raw + 'T00:00:00').toLocaleDateString('es-CL');
+                        } else {
+                            detalleVencimiento.textContent = raw;
+                        }
+                    }
                     if (monto !== '') {
                         montoInput.value = monto;
                     }
@@ -691,8 +734,14 @@ $moneyFormatter = static function (float $value): string {
                     if (montoInput) {
                         montoInput.value = '';
                     }
+                    if (detalleTiempo) detalleTiempo.textContent = '-';
+                    if (detalleVencimiento) detalleVencimiento.textContent = '-';
                 });
                 renderServicios(clienteSelect.value);
+            }
+
+            if (servicioSelect) {
+                servicioSelect.dispatchEvent(new Event('change'));
             }
 
             if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {

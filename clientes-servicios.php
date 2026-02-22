@@ -207,6 +207,23 @@ try {
     $errorMessage = 'No se pudo preparar el módulo de suspensión de servicios.';
 }
 
+
+try {
+    db()->exec('ALTER TABLE clientes_servicios ADD COLUMN fecha_registro DATE NULL AFTER servicio_id');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+try {
+    db()->exec('ALTER TABLE clientes_servicios ADD COLUMN tiempo_servicio VARCHAR(30) NULL AFTER fecha_registro');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+try {
+    db()->exec('ALTER TABLE clientes_servicios ADD COLUMN fecha_vencimiento DATE NULL AFTER tiempo_servicio');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_suspension' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $suspensionId = (int) ($_POST['suspension_id'] ?? 0);
     $clienteFiltroId = (int) ($_POST['cliente_id'] ?? 0);
@@ -363,6 +380,8 @@ try {
                              c.nombre AS cliente,
                              c.correo AS cliente_correo,
                              s.nombre AS servicio,
+                             cs.tiempo_servicio,
+                             cs.fecha_vencimiento,
                              cb.id AS cobro_id,
                              cb.monto,
                              cb.estado,
@@ -446,14 +465,16 @@ try {
                 <div class="card-header"><h5 class="mb-0">Servicios asociados no pagados</h5></div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
-                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Cobro</th><th>Monto</th><th>Motivo suspensión</th><th>Detalle</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Tiempo</th><th>Vence servicio</th><th>Cobro</th><th>Monto</th><th>Motivo suspensión</th><th>Detalle</th><th>Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($serviciosPendientes)) : ?>
-                            <tr><td colspan="7" class="text-center text-muted">No hay servicios asociados con cobros pendientes.</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted">No hay servicios asociados con cobros pendientes.</td></tr>
                         <?php else : foreach ($serviciosPendientes as $row) : ?>
                             <tr>
                                 <td><?php echo htmlspecialchars(($row['cliente_codigo'] ?? '') . ' - ' . $row['cliente'], ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo htmlspecialchars($row['cliente_correo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small></td>
                                 <td><?php echo htmlspecialchars($row['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars($row['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars(!empty($row['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $row['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>#<?php echo (int) $row['cobro_id']; ?><br><small><?php echo htmlspecialchars((string) ($row['estado'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small></td>
                                 <td>$<?php echo number_format((float) $row['monto'], 2, ',', '.'); ?></td>
                                 <td colspan="3">

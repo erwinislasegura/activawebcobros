@@ -283,16 +283,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
 $cobrosPendientes = [];
 $pagos = [];
+
+try {
+    db()->exec('ALTER TABLE clientes_servicios ADD COLUMN fecha_registro DATE NULL AFTER servicio_id');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+try {
+    db()->exec('ALTER TABLE clientes_servicios ADD COLUMN tiempo_servicio VARCHAR(30) NULL AFTER fecha_registro');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+try {
+    db()->exec('ALTER TABLE clientes_servicios ADD COLUMN fecha_vencimiento DATE NULL AFTER tiempo_servicio');
+} catch (Exception $e) {
+} catch (Error $e) {
+}
+
 try {
     $cobrosPendientes = db()->query(
         'SELECT cs.id,
                 COALESCE(c.nombre, cs.cliente) AS cliente,
                 s.nombre AS servicio,
+                csa.tiempo_servicio,
+                csa.fecha_vencimiento,
                 cs.referencia,
                 cs.monto
          FROM cobros_servicios cs
          LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
+         LEFT JOIN clientes_servicios csa ON csa.cliente_id = cs.cliente_id AND csa.servicio_id = cs.servicio_id
          WHERE cs.estado <> "Pagado"
          ORDER BY cs.id DESC'
     )->fetchAll();
@@ -305,11 +325,14 @@ try {
                 p.referencia_pago,
                 COALESCE(c.nombre, cs.cliente) AS cliente,
                 s.nombre AS servicio,
+                csa.tiempo_servicio,
+                csa.fecha_vencimiento,
                 cs.referencia
          FROM pagos_clientes p
          JOIN cobros_servicios cs ON cs.id = p.cobro_id
          LEFT JOIN clientes c ON c.id = p.cliente_id
          LEFT JOIN servicios s ON s.id = p.servicio_id
+         LEFT JOIN clientes_servicios csa ON csa.cliente_id = p.cliente_id AND csa.servicio_id = p.servicio_id
          ORDER BY p.id DESC'
     )->fetchAll();
 } catch (Exception $e) {
@@ -387,9 +410,11 @@ try {
                                                     <option value="<?php echo (int) $cobro['id']; ?>"
                                                         data-cliente="<?php echo htmlspecialchars($cobro['cliente'], ENT_QUOTES, 'UTF-8'); ?>"
                                                         data-servicio="<?php echo htmlspecialchars($cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-tiempo="<?php echo htmlspecialchars((string) ($cobro['tiempo_servicio'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-vencimiento="<?php echo htmlspecialchars(!empty($cobro['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $cobro['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?>"
                                                         data-referencia="<?php echo htmlspecialchars($cobro['referencia'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
                                                         data-monto="<?php echo htmlspecialchars((string) $cobro['monto'], ENT_QUOTES, 'UTF-8'); ?>">
-                                                        <?php echo htmlspecialchars($cobro['cliente'] . ' - ' . $cobro['servicio'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        <?php echo htmlspecialchars($cobro['cliente'] . ' - ' . $cobro['servicio'] . ' · ' . (($cobro['tiempo_servicio'] ?? '-') ?: '-') . ' · vence ' . (!empty($cobro['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $cobro['fecha_vencimiento'])) : '-'), ENT_QUOTES, 'UTF-8'); ?>
                                                     </option>
                                                 <?php endforeach; ?>
                                             </select>
@@ -408,6 +433,14 @@ try {
                                         <div class="col-md-6">
                                             <label class="form-label" for="pago-servicio">Servicio</label>
                                             <input type="text" id="pago-servicio" class="form-control" readonly>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="pago-tiempo">Periodicidad</label>
+                                            <input type="text" id="pago-tiempo" class="form-control" readonly>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="pago-vencimiento-servicio">Vencimiento servicio</label>
+                                            <input type="text" id="pago-vencimiento-servicio" class="form-control" readonly>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label" for="pago-referencia">Referencia del cobro</label>
@@ -461,6 +494,8 @@ try {
                                             <tr>
                                                 <th>Cliente</th>
                                                 <th>Servicio</th>
+                                                <th>Tiempo</th>
+                                                <th>Vence servicio</th>
                                                 <th>Referencia</th>
                                                 <th>Monto</th>
                                                 <th>Fecha pago</th>
@@ -471,13 +506,15 @@ try {
                                         <tbody>
                                             <?php if (empty($pagos)) : ?>
                                                 <tr>
-                                                    <td colspan="7" class="text-center text-muted">No hay pagos registrados.</td>
+                                                    <td colspan="9" class="text-center text-muted">No hay pagos registrados.</td>
                                                 </tr>
                                             <?php else : ?>
                                                 <?php foreach ($pagos as $pago) : ?>
                                                     <tr>
                                                         <td><?php echo htmlspecialchars($pago['cliente'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($pago['servicio'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars((string) (($pago['tiempo_servicio'] ?? '-') ?: '-'), ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><?php echo htmlspecialchars(!empty($pago['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $pago['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td><?php echo htmlspecialchars($pago['referencia'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                                         <td>$<?php echo number_format((float) $pago['monto'], 2, ',', '.'); ?></td>
                                                         <td><?php echo htmlspecialchars(date('d/m/Y', strtotime($pago['fecha_pago'] ?? 'now')), ENT_QUOTES, 'UTF-8'); ?></td>
@@ -524,6 +561,8 @@ try {
             const cobroSelect = document.getElementById('pago-cobro');
             const clienteInput = document.getElementById('pago-cliente');
             const servicioInput = document.getElementById('pago-servicio');
+            const tiempoInput = document.getElementById('pago-tiempo');
+            const vencimientoServicioInput = document.getElementById('pago-vencimiento-servicio');
             const referenciaInput = document.getElementById('pago-referencia');
             const montoInput = document.getElementById('pago-monto');
 
@@ -537,6 +576,12 @@ try {
                 }
                 clienteInput.value = selected.getAttribute('data-cliente') || '';
                 servicioInput.value = selected.getAttribute('data-servicio') || '';
+                if (tiempoInput) {
+                    tiempoInput.value = selected.getAttribute('data-tiempo') || '-';
+                }
+                if (vencimientoServicioInput) {
+                    vencimientoServicioInput.value = selected.getAttribute('data-vencimiento') || '-';
+                }
                 referenciaInput.value = selected.getAttribute('data-referencia') || '';
                 montoInput.value = selected.getAttribute('data-monto') || '';
             }
