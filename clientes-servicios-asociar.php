@@ -36,6 +36,23 @@ function calcular_fecha_vencimiento(string $fechaRegistro, string $periodicidad)
     return date('Y-m-d', strtotime($fechaRegistro . ' ' . $intervalos[$norm]));
 }
 
+function calcular_dias_faltantes(?string $fechaVencimiento): ?int
+{
+    $fechaVencimiento = trim((string) $fechaVencimiento);
+    if ($fechaVencimiento === '') {
+        return null;
+    }
+
+    try {
+        $hoy = new DateTime('today');
+        $venc = new DateTime($fechaVencimiento);
+        $diff = $hoy->diff($venc);
+        return (int) $diff->format('%r%a');
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
 function ensure_column(string $table, string $column, string $definition): void
 {
     $dbName = $GLOBALS['config']['db']['name'] ?? '';
@@ -324,7 +341,7 @@ try {
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
-                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Registro</th><th>Tiempo</th><th>Vencimiento</th><th>Creado</th><th class="text-end">Acción</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Registro</th><th>Tiempo</th><th>Vencimiento</th><th>Días faltantes</th><th class="text-end">Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($asociaciones)) : ?>
                             <tr><td colspan="7" class="text-center text-muted">No hay asociaciones registradas.</td></tr>
@@ -335,15 +352,37 @@ try {
                                 <td><?php echo htmlspecialchars(!empty($item['fecha_registro']) ? date('d/m/Y', strtotime((string) $item['fecha_registro'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars($item['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars(!empty($item['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $item['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string) $item['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <?php $diasFaltantes = calcular_dias_faltantes((string) ($item['fecha_vencimiento'] ?? '')); ?>
+                                <td>
+                                    <?php if ($diasFaltantes === null) : ?>
+                                        -
+                                    <?php elseif ($diasFaltantes < 0) : ?>
+                                        <span class="badge text-bg-danger">Vencido hace <?php echo abs($diasFaltantes); ?> días</span>
+                                    <?php elseif ($diasFaltantes === 0) : ?>
+                                        <span class="badge text-bg-warning">Vence hoy</span>
+                                    <?php else : ?>
+                                        <span class="badge text-bg-success"><?php echo $diasFaltantes; ?> días</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="text-end">
-                                    <a href="clientes-servicios-asociar.php?id=<?php echo (int) $item['id']; ?>" class="btn btn-sm btn-outline-secondary">Editar</a>
-                                    <form method="post" class="d-inline" onsubmit="return confirm('¿Eliminar esta asociación?');">
-                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="id" value="<?php echo (int) $item['id']; ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
-                                    </form>
+                                    <div class="dropdown d-inline-block">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                            Acciones
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li>
+                                                <a class="dropdown-item" href="clientes-servicios-asociar.php?id=<?php echo (int) $item['id']; ?>">Editar</a>
+                                            </li>
+                                            <li>
+                                                <form method="post" onsubmit="return confirm('¿Eliminar esta asociación?');">
+                                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <input type="hidden" name="action" value="delete">
+                                                    <input type="hidden" name="id" value="<?php echo (int) $item['id']; ?>">
+                                                    <button type="submit" class="dropdown-item text-danger">Eliminar</button>
+                                                </form>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; endif; ?>
