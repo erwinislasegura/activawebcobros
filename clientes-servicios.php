@@ -463,38 +463,37 @@ try {
 
             <div class="card mb-3">
                 <div class="card-header"><h5 class="mb-0">Servicios asociados no pagados</h5></div>
-                <div class="card-body table-responsive">
-                    <table class="table table-striped mb-0">
-                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Tiempo</th><th>Vence servicio</th><th>Cobro</th><th>Monto</th><th>Motivo suspensión</th><th>Detalle</th><th>Acción</th></tr></thead>
+                <div class="card-body table-responsive p-3">
+                    <table class="table table-striped table-hover align-middle mb-0">
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Tiempo</th><th>Vence servicio</th><th>Cobro</th><th>Monto</th><th>Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($serviciosPendientes)) : ?>
-                            <tr><td colspan="9" class="text-center text-muted">No hay servicios asociados con cobros pendientes.</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-4">No hay servicios asociados con cobros pendientes.</td></tr>
                         <?php else : foreach ($serviciosPendientes as $row) : ?>
                             <tr>
-                                <td><?php echo htmlspecialchars(($row['cliente_codigo'] ?? '') . ' - ' . $row['cliente'], ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo htmlspecialchars($row['cliente_correo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small></td>
+                                <td class="py-3"><?php echo htmlspecialchars(($row['cliente_codigo'] ?? '') . ' - ' . $row['cliente'], ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo htmlspecialchars($row['cliente_correo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small></td>
                                 <td><?php echo htmlspecialchars($row['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars($row['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars(!empty($row['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $row['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>#<?php echo (int) $row['cobro_id']; ?><br><small><?php echo htmlspecialchars((string) ($row['estado'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></small></td>
                                 <td>$<?php echo number_format((float) $row['monto'], 2, ',', '.'); ?></td>
-                                <td colspan="3">
-                                    <form method="post" class="row g-2 js-suspension-form">
+                                <td>
+                                    <form method="post" class="d-flex flex-column gap-2 js-suspension-form">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                         <input type="hidden" name="action" value="suspender">
                                         <input type="hidden" name="cliente_servicio_id" value="<?php echo (int) $row['cliente_servicio_id']; ?>">
                                         <input type="hidden" name="cobro_id" value="<?php echo (int) $row['cobro_id']; ?>">
                                         <input type="hidden" name="cliente_id" value="<?php echo (int) $row['cliente_id']; ?>">
-                                        <div class="col-md-3">
+                                        <input type="hidden" name="motivo" class="js-motivo" required>
+                                        <input type="hidden" name="detalle" class="js-detalle">
+                                        <div>
                                             <select class="form-select form-select-sm js-plantilla-suspension" aria-label="Plantillas de suspensión">
-                                                <option value="">Plantilla rápida</option>
-                                                <option value="mora" data-motivo="Facturas vencidas sin regularización." data-detalle="Suspensión preventiva por mora. Sitio y correo podrían quedar fuera de servicio hasta acreditar pago.">Mora</option>
+                                                <option value="mora" data-motivo="Servicio inpago, sin regularización." data-detalle="Suspensión preventiva por mora. Sitio y correo podrían quedar fuera de servicio hasta acreditar pago." selected>Mora</option>
                                                 <option value="recordatorio" data-motivo="No pago luego de avisos previos." data-detalle="Sin regularización tras múltiples avisos. Se recomienda pago inmediato para evitar pérdida de continuidad digital.">Sin respuesta</option>
                                                 <option value="reactivacion" data-motivo="Pendiente para reactivación." data-detalle="Regularizando hoy se gestiona reactivación prioritaria de servicios y correo corporativo.">Reactivación</option>
                                             </select>
                                         </div>
-                                        <div class="col-md-4"><input type="text" name="motivo" class="form-control form-control-sm js-motivo" placeholder="Motivo (obligatorio)" required></div>
-                                        <div class="col-md-3"><input type="text" name="detalle" class="form-control form-control-sm js-detalle" placeholder="Detalle importante (web/correo sin servicio)"></div>
-                                        <div class="col-md-2"><button class="btn btn-danger btn-sm w-100" type="submit">Suspender</button></div>
+                                        <div><button class="btn btn-danger btn-sm w-100" type="submit">Suspender</button></div>
                                     </form>
                                 </td>
                             </tr>
@@ -508,16 +507,15 @@ try {
                 <div class="card-header"><h5 class="mb-0">Registro de suspensiones</h5></div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
-                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Motivo</th><th>Detalle</th><th>Correo</th><th>Fecha</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Motivo</th><th>Correo</th><th>Fecha</th><th>Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($suspensiones)) : ?>
-                            <tr><td colspan="7" class="text-center text-muted">Sin registros de suspensión.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted">Sin registros de suspensión.</td></tr>
                         <?php else : foreach ($suspensiones as $suspension) : ?>
                             <tr>
                                 <td><?php echo htmlspecialchars(($suspension['cliente_codigo'] ?? '') . ' - ' . $suspension['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars($suspension['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo nl2br(htmlspecialchars((string) $suspension['motivo'], ENT_QUOTES, 'UTF-8')); ?></td>
-                                <td><?php echo nl2br(htmlspecialchars((string) ($suspension['detalle'] ?? '-'), ENT_QUOTES, 'UTF-8')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($suspension['correo_destinatario'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?><br><small><?php echo !empty($suspension['correo_enviado_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime((string) $suspension['correo_enviado_at'])), ENT_QUOTES, 'UTF-8') : 'No enviado'; ?></small></td>
                                 <td><?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string) $suspension['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
@@ -550,14 +548,17 @@ document.querySelectorAll('.js-suspension-form').forEach((form) => {
 
     if (!selector || !motivo || !detalle) return;
 
-    selector.addEventListener('change', () => {
+    const aplicarPlantilla = () => {
         const option = selector.options[selector.selectedIndex];
         const motivoText = option.getAttribute('data-motivo') || '';
         const detalleText = option.getAttribute('data-detalle') || '';
 
         if (motivoText !== '') motivo.value = motivoText;
         if (detalleText !== '') detalle.value = detalleText;
-    });
+    };
+
+    selector.addEventListener('change', aplicarPlantilla);
+    aplicarPlantilla();
 });
 </script>
 </body>
