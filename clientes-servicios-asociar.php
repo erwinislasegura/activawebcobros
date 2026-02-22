@@ -5,6 +5,49 @@ $errors = [];
 $errorMessage = '';
 $success = $_GET['success'] ?? '';
 
+
+function normalizar_periodicidad_servicio(string $periodicidad): string
+{
+    $periodicidad = mb_strtolower(trim($periodicidad), 'UTF-8');
+    $periodicidad = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $periodicidad);
+    return $periodicidad;
+}
+
+function calcular_fecha_vencimiento(string $fechaRegistro, string $periodicidad): ?string
+{
+    if ($fechaRegistro === '') {
+        return null;
+    }
+
+    $norm = normalizar_periodicidad_servicio($periodicidad);
+    $intervalos = [
+        'mensual' => '+1 month',
+        'bimestral' => '+2 months',
+        'trimestral' => '+3 months',
+        'semestral' => '+6 months',
+        'anual' => '+1 year',
+    ];
+
+    if (!isset($intervalos[$norm])) {
+        return null;
+    }
+
+    return date('Y-m-d', strtotime($fechaRegistro . ' ' . $intervalos[$norm]));
+}
+
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    if ((int) $stmt->fetchColumn() === 0) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
+
 try {
     db()->exec(
         'CREATE TABLE IF NOT EXISTS clientes_servicios (
@@ -24,6 +67,24 @@ try {
     $errorMessage = 'No se pudo preparar la tabla de asociaciones cliente-servicio.';
 } catch (Error $e) {
     $errorMessage = 'No se pudo preparar la tabla de asociaciones cliente-servicio.';
+}
+
+try {
+    ensure_column('clientes_servicios', 'fecha_registro', 'DATE NULL AFTER servicio_id');
+    ensure_column('clientes_servicios', 'tiempo_servicio', 'VARCHAR(30) NULL AFTER fecha_registro');
+    ensure_column('clientes_servicios', 'fecha_vencimiento', 'DATE NULL AFTER tiempo_servicio');
+
+    db()->exec('UPDATE clientes_servicios SET tiempo_servicio = "Mensual" WHERE tiempo_servicio IS NULL OR TRIM(tiempo_servicio) = ""');
+    db()->exec('UPDATE clientes_servicios SET fecha_registro = DATE(created_at) WHERE fecha_registro IS NULL');
+    db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 1 MONTH) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "mensual"');
+    db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 2 MONTH) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "bimestral"');
+    db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 3 MONTH) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "trimestral"');
+    db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 6 MONTH) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "semestral"');
+    db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 1 YEAR) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "anual"');
+} catch (Exception $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la estructura de asociaciones.';
+} catch (Error $e) {
+    $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la estructura de asociaciones.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ?? null)) {
@@ -49,12 +110,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     if ($action === 'create') {
         $clienteId = (int) ($_POST['cliente_id'] ?? 0);
         $servicioId = (int) ($_POST['servicio_id'] ?? 0);
+        $fechaRegistro = trim((string) ($_POST['fecha_registro'] ?? ''));
+        $tiempoServicio = trim((string) ($_POST['tiempo_servicio'] ?? 'Mensual'));
 
         if ($clienteId <= 0) {
             $errors[] = 'Selecciona un cliente válido.';
         }
         if ($servicioId <= 0) {
             $errors[] = 'Selecciona un servicio válido.';
+        }
+        if ($fechaRegistro === '') {
+            $errors[] = 'Debes indicar la fecha de registro.';
+        }
+
+        $fechaVencimiento = calcular_fecha_vencimiento($fechaRegistro, $tiempoServicio);
+        if ($fechaVencimiento === null) {
+            $errors[] = 'Selecciona un tiempo de servicio válido para calcular el vencimiento.';
         }
 
         if (empty($errors)) {
@@ -64,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 if ((int) $stmtExists->fetchColumn() > 0) {
                     $errors[] = 'Esta asociación ya existe.';
                 } else {
-                    $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id) VALUES (?, ?)');
-                    $stmtInsert->execute([$clienteId, $servicioId]);
+                    $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, fecha_registro, tiempo_servicio, fecha_vencimiento) VALUES (?, ?, ?, ?, ?)');
+                    $stmtInsert->execute([$clienteId, $servicioId, $fechaRegistro, $tiempoServicio, $fechaVencimiento]);
                     redirect('clientes-servicios-asociar.php?success=1');
                 }
             } catch (Exception $e) {
@@ -99,6 +170,9 @@ try {
                 c.codigo AS cliente_codigo,
                 c.nombre AS cliente,
                 s.nombre AS servicio,
+                cs.fecha_registro,
+                cs.tiempo_servicio,
+                cs.fecha_vencimiento,
                 cs.created_at
          FROM clientes_servicios cs
          JOIN clientes c ON c.id = cs.cliente_id
@@ -168,6 +242,20 @@ try {
                                 <?php endforeach; ?>
                             </select>
                         </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label" for="fecha-registro">Fecha de registro</label>
+                            <input type="date" id="fecha-registro" name="fecha_registro" class="form-control" value="<?php echo htmlspecialchars($_POST['fecha_registro'] ?? date('Y-m-d'), ENT_QUOTES, 'UTF-8'); ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="tiempo-servicio">Tiempo de servicio</label>
+                            <select id="tiempo-servicio" name="tiempo_servicio" class="form-select" required>
+                                <?php $tiempoServicioActual = $_POST['tiempo_servicio'] ?? 'Mensual'; ?>
+                                <?php foreach (['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] as $periodo) : ?>
+                                    <option value="<?php echo $periodo; ?>" <?php echo $tiempoServicioActual === $periodo ? 'selected' : ''; ?>><?php echo $periodo; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                         <div class="col-12">
                             <div class="border rounded p-3 bg-light" id="servicio-detalle" style="display:none;">
                                 <h6 class="mb-2">Detalle del servicio seleccionado</h6>
@@ -193,14 +281,17 @@ try {
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
-                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Fecha</th><th class="text-end">Acción</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>Servicio</th><th>Registro</th><th>Tiempo</th><th>Vencimiento</th><th>Creado</th><th class="text-end">Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($asociaciones)) : ?>
-                            <tr><td colspan="4" class="text-center text-muted">No hay asociaciones registradas.</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted">No hay asociaciones registradas.</td></tr>
                         <?php else : foreach ($asociaciones as $item) : ?>
                             <tr>
                                 <td><?php echo htmlspecialchars(($item['cliente_codigo'] ?? '') . ' - ' . $item['cliente'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars($item['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars(!empty($item['fecha_registro']) ? date('d/m/Y', strtotime((string) $item['fecha_registro'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars($item['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars(!empty($item['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $item['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string) $item['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="text-end">
                                     <form method="post" class="d-inline" onsubmit="return confirm('¿Eliminar esta asociación?');">
