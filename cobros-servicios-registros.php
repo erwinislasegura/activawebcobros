@@ -4,6 +4,7 @@ require __DIR__ . '/app/bootstrap.php';
 $errors = [];
 $errorMessage = '';
 $success = $_GET['success'] ?? '';
+$generatedCount = isset($_GET['generated']) ? (int) $_GET['generated'] : 0;
 
 try {
     db()->exec(
@@ -130,6 +131,58 @@ if ($referenciaInput === '') {
 
 $serviciosIniciales = [];
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'auto_generate' && verify_csrf($_POST['csrf_token'] ?? null)) {
+    try {
+        $sql = 'SELECT cs.cliente_id,
+                       cs.servicio_id,
+                       cs.fecha_vencimiento,
+                       c.nombre AS cliente,
+                       s.monto
+                FROM clientes_servicios cs
+                JOIN clientes c ON c.id = cs.cliente_id AND c.estado = 1
+                JOIN servicios s ON s.id = cs.servicio_id AND s.estado = 1
+                LEFT JOIN cobros_servicios cob
+                  ON cob.cliente_id = cs.cliente_id
+                 AND cob.servicio_id = cs.servicio_id
+                 AND cob.estado = "Pendiente"
+                 AND DATE_FORMAT(cob.fecha_cobro, "%Y-%m") = DATE_FORMAT(CURDATE(), "%Y-%m")
+                WHERE cob.id IS NULL';
+
+        $asignaciones = db()->query($sql)->fetchAll();
+        $insertStmt = db()->prepare('INSERT INTO cobros_servicios (servicio_id, cliente_id, cliente, referencia, monto, fecha_cobro, fecha_primer_aviso, fecha_segundo_aviso, fecha_tercer_aviso, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
+        $created = 0;
+        foreach ($asignaciones as $asignacion) {
+            $fechaBase = trim((string) ($asignacion['fecha_vencimiento'] ?? ''));
+            if ($fechaBase === '' || strtotime($fechaBase) === false) {
+                $fechaBase = date('Y-m-d');
+            }
+            $fechaSegundo = date('Y-m-d', strtotime($fechaBase . ' +2 days'));
+            $fechaTercero = date('Y-m-d', strtotime($fechaBase . ' +5 days'));
+
+            $insertStmt->execute([
+                (int) $asignacion['servicio_id'],
+                (int) $asignacion['cliente_id'],
+                (string) ($asignacion['cliente'] ?? 'Cliente sin nombre'),
+                referencia_unica(),
+                (float) ($asignacion['monto'] ?? 0),
+                $fechaBase,
+                $fechaBase,
+                $fechaSegundo,
+                $fechaTercero,
+                'Pendiente',
+            ]);
+            $created++;
+        }
+
+        redirect('cobros-servicios-registros.php?generated=' . $created);
+    } catch (Exception $e) {
+        $errorMessage = 'No se pudieron generar los cobros automáticos.';
+    } catch (Error $e) {
+        $errorMessage = 'No se pudieron generar los cobros automáticos.';
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete' && verify_csrf($_POST['csrf_token'] ?? null)) {
     $deleteId = isset($_POST['id']) ? (int) $_POST['id'] : 0;
     if ($deleteId > 0) {
@@ -170,6 +223,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     $fechaSegundoAviso = trim($_POST['fecha_segundo_aviso'] ?? '');
     $fechaTercerAviso = trim($_POST['fecha_tercer_aviso'] ?? '');
     $estado = trim($_POST['estado'] ?? 'Pendiente');
+    $modoSimple = isset($_POST['modo_simple']) && $_POST['modo_simple'] === '1';
+
+    if ($modoSimple && $clienteId > 0 && $servicioId > 0) {
+        try {
+            $stmtAuto = db()->prepare('SELECT s.monto, cs.fecha_vencimiento
+                                       FROM clientes_servicios cs
+                                       JOIN servicios s ON s.id = cs.servicio_id
+                                       WHERE cs.cliente_id = ? AND cs.servicio_id = ?
+                                       LIMIT 1');
+            $stmtAuto->execute([$clienteId, $servicioId]);
+            $autoData = $stmtAuto->fetch() ?: null;
+            if ($autoData) {
+                $monto = (string) ($autoData['monto'] ?? $monto);
+                if ($fechaPrimerAviso === '') {
+                    $fechaPrimerAviso = (string) ($autoData['fecha_vencimiento'] ?? '');
+                }
+            }
+        } catch (Exception $e) {
+        } catch (Error $e) {
+        }
+    }
 
     if ($servicioId <= 0) {
         $errors[] = 'Selecciona un servicio válido.';
@@ -201,6 +275,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     }
 
     if ($fechaPrimerAviso !== '') {
+        $fechaCobro = $fechaPrimerAviso;
+    } elseif ($modoSimple) {
+        $fechaPrimerAviso = date('Y-m-d');
         $fechaCobro = $fechaPrimerAviso;
     }
     if ($fechaPrimerAviso !== '' && $fechaSegundoAviso === '') {
@@ -349,6 +426,29 @@ if ($cobroEdit && isset($cobroEdit['cliente_id'])) {
 $moneyFormatter = static function (float $value): string {
     return '$' . number_format($value, 2, ',', '.');
 };
+
+$resumen = [
+    'pendientes' => 0,
+    'pagados' => 0,
+    'vencidos' => 0,
+    'monto_pendiente' => 0.0,
+];
+foreach ($cobros as $cobro) {
+    $estadoCobro = (string) ($cobro['estado'] ?? 'Pendiente');
+    $montoCobro = (float) ($cobro['monto'] ?? 0);
+    if ($estadoCobro === 'Pagado') {
+        $resumen['pagados']++;
+        continue;
+    }
+    if ($estadoCobro === 'Pendiente') {
+        $resumen['pendientes']++;
+        $resumen['monto_pendiente'] += $montoCobro;
+        $fechaCobro = (string) ($cobro['fecha_cobro'] ?? '');
+        if ($fechaCobro !== '' && strtotime($fechaCobro) !== false && strtotime($fechaCobro) < strtotime(date('Y-m-d'))) {
+            $resumen['vencidos']++;
+        }
+    }
+}
 ?>
 <?php include('partials/html.php'); ?>
 
@@ -374,6 +474,8 @@ $moneyFormatter = static function (float $value): string {
 
                 <?php $subtitle = "Cobros de servicios"; $title = "Registros de cobros"; include('partials/page-title.php'); ?>
 
+                <?php $flowCurrentStep = 'cobros'; include('partials/flow-quick-nav.php'); ?>
+
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Cobro registrado correctamente.</div>
                 <?php endif; ?>
@@ -381,6 +483,53 @@ $moneyFormatter = static function (float $value): string {
                 <?php if ($errorMessage !== '') : ?>
                     <div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?></div>
                 <?php endif; ?>
+
+                <?php if ($generatedCount >= 0 && isset($_GET['generated'])) : ?>
+                    <div class="alert alert-info">Automatización ejecutada: <?php echo $generatedCount; ?> cobros pendientes generados para este mes.</div>
+                <?php endif; ?>
+
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div>
+                            <h6 class="mb-0">Siguiente paso del flujo</h6>
+                            <small class="text-muted">Después de generar o registrar cobros, continúa con pagos, avisos y control de totales.</small>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a class="btn btn-sm btn-outline-success" href="cobros-pagos.php">Registrar pago</a>
+                            <a class="btn btn-sm btn-outline-warning" href="cobros-avisos.php">Enviar avisos</a>
+                            <a class="btn btn-sm btn-outline-dark" href="cobros-totales.php">Ver totales</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <div class="card border-start border-warning border-3 h-100"><div class="card-body"><small class="text-muted">Pendientes</small><h4 class="mb-0"><?php echo (int) $resumen['pendientes']; ?></h4></div></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-start border-success border-3 h-100"><div class="card-body"><small class="text-muted">Pagados</small><h4 class="mb-0"><?php echo (int) $resumen['pagados']; ?></h4></div></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-start border-danger border-3 h-100"><div class="card-body"><small class="text-muted">Pendientes vencidos</small><h4 class="mb-0"><?php echo (int) $resumen['vencidos']; ?></h4></div></div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-start border-primary border-3 h-100"><div class="card-body"><small class="text-muted">Monto pendiente</small><h4 class="mb-0"><?php echo $moneyFormatter((float) $resumen['monto_pendiente']); ?></h4></div></div>
+                    </div>
+                </div>
+
+                <div class="card border-primary border border-opacity-25 mb-3">
+                    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div>
+                            <h6 class="mb-1">Generación automática mensual</h6>
+                            <p class="text-muted mb-0">Crea cobros pendientes para todos los servicios activos asignados que aún no tengan cobro pendiente este mes.</p>
+                        </div>
+                        <form method="post" class="m-0">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                            <input type="hidden" name="action" value="auto_generate">
+                            <button type="submit" class="btn btn-outline-primary">Generar cobros automáticos</button>
+                        </form>
+                    </div>
+                </div>
 
                 <div class="row">
                     <div class="col-12">
@@ -399,13 +548,20 @@ $moneyFormatter = static function (float $value): string {
                                 <?php endif; ?>
                                 <form method="post">
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" id="modo-simple-input" name="modo_simple" value="<?php echo $cobroEdit ? '0' : '1'; ?>">
                                     <div class="row g-3">
+                                        <div class="col-12">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="modo-simple-toggle" <?php echo $cobroEdit ? '' : 'checked'; ?>>
+                                                <label class="form-check-label" for="modo-simple-toggle">Modo simple: completar monto y fechas automáticamente según el servicio asignado.</label>
+                                            </div>
+                                        </div>
                                         <div class="col-md-6">
                                             <label class="form-label" for="cobro-servicio">Servicio</label>
                                             <select id="cobro-servicio" name="servicio_id" class="form-select" required>
                                                 <option value=""><?php echo empty($serviciosIniciales) ? 'Selecciona un cliente primero' : 'Selecciona un servicio'; ?></option>
                                                 <?php foreach ($serviciosIniciales as $servicio) : ?>
-                                                    <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" data-tiempo="<?php echo htmlspecialchars((string) ($servicio['tiempo_servicio'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>" data-vencimiento="<?php echo htmlspecialchars(!empty($servicio['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $servicio['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
+                                                    <option value="<?php echo (int) $servicio['id']; ?>" data-monto="<?php echo htmlspecialchars((string) $servicio['monto'], ENT_QUOTES, 'UTF-8'); ?>" data-tiempo="<?php echo htmlspecialchars((string) ($servicio['tiempo_servicio'] ?? '-'), ENT_QUOTES, 'UTF-8'); ?>" data-vencimiento="<?php echo htmlspecialchars(!empty($servicio['fecha_vencimiento']) ? date('Y-m-d', strtotime((string) $servicio['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($cobroEdit['servicio_id'] ?? 0) == (int) $servicio['id'] ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($servicio['nombre'] . ' · ' . ($servicio['tiempo_servicio'] ?: '-') . ' · vence ' . (!empty($servicio['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $servicio['fecha_vencimiento'])) : '-'), ENT_QUOTES, 'UTF-8'); ?>
                                                     </option>
                                                 <?php endforeach; ?>
@@ -670,8 +826,43 @@ $moneyFormatter = static function (float $value): string {
             const primerAvisoInput = document.getElementById('cobro-primer-aviso');
             const segundoAvisoInput = document.getElementById('cobro-segundo-aviso');
             const tercerAvisoInput = document.getElementById('cobro-tercer-aviso');
+            const modoSimpleToggle = document.getElementById('modo-simple-toggle');
+            const modoSimpleInput = document.getElementById('modo-simple-input');
             const serviciosPorCliente = <?php echo json_encode($serviciosPorCliente); ?>;
             const servicioSeleccionado = <?php echo (int) ($cobroEdit['servicio_id'] ?? 0); ?>;
+
+            function recalcularAvisosDesdeFechaBase(fechaBase) {
+                if (!fechaBase || !segundoAvisoInput || !tercerAvisoInput) {
+                    return;
+                }
+                const primer = new Date(fechaBase + 'T00:00:00');
+                const segundo = new Date(primer);
+                segundo.setDate(segundo.getDate() + 2);
+                const tercero = new Date(primer);
+                tercero.setDate(tercero.getDate() + 5);
+                segundoAvisoInput.value = segundo.toISOString().slice(0, 10);
+                tercerAvisoInput.value = tercero.toISOString().slice(0, 10);
+            }
+
+            function aplicarModoSimpleDesdeServicio() {
+                if (!modoSimpleToggle || !modoSimpleToggle.checked || !servicioSelect) {
+                    return;
+                }
+                const selected = servicioSelect.options[servicioSelect.selectedIndex];
+                if (!selected) {
+                    return;
+                }
+                const monto = selected?.dataset?.monto ?? '';
+                const vencimiento = selected?.dataset?.vencimiento ?? '';
+                if (montoInput && monto !== '') {
+                    montoInput.value = monto;
+                }
+                if (primerAvisoInput) {
+                    const fechaBase = vencimiento && vencimiento !== '-' ? vencimiento : new Date().toISOString().slice(0, 10);
+                    primerAvisoInput.value = fechaBase;
+                    recalcularAvisosDesdeFechaBase(fechaBase);
+                }
+            }
 
             function renderServicios(clienteId) {
                 if (!servicioSelect) {
@@ -709,22 +900,7 @@ $moneyFormatter = static function (float $value): string {
 
             if (servicioSelect && montoInput) {
                 servicioSelect.addEventListener('change', function () {
-                    const selected = servicioSelect.options[servicioSelect.selectedIndex];
-                    const monto = selected?.dataset?.monto ?? '';
-                    if (detalleTiempo) {
-                        detalleTiempo.textContent = selected?.dataset?.tiempo ?? '-';
-                    }
-                    if (detalleVencimiento) {
-                        const raw = selected?.dataset?.vencimiento ?? '-';
-                        if (raw && raw !== '-' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-                            detalleVencimiento.textContent = new Date(raw + 'T00:00:00').toLocaleDateString('es-CL');
-                        } else {
-                            detalleVencimiento.textContent = raw;
-                        }
-                    }
-                    if (monto !== '') {
-                        montoInput.value = monto;
-                    }
+                    aplicarModoSimpleDesdeServicio();
                 });
             }
 
@@ -734,8 +910,7 @@ $moneyFormatter = static function (float $value): string {
                     if (montoInput) {
                         montoInput.value = '';
                     }
-                    if (detalleTiempo) detalleTiempo.textContent = '-';
-                    if (detalleVencimiento) detalleVencimiento.textContent = '-';
+                    aplicarModoSimpleDesdeServicio();
                 });
                 renderServicios(clienteSelect.value);
             }
@@ -746,18 +921,22 @@ $moneyFormatter = static function (float $value): string {
 
             if (primerAvisoInput && segundoAvisoInput && tercerAvisoInput) {
                 primerAvisoInput.addEventListener('change', function () {
-                    if (!primerAvisoInput.value) {
+                    if (!primerAvisoInput.value || (modoSimpleToggle && !modoSimpleToggle.checked)) {
                         return;
                     }
-                    const primer = new Date(primerAvisoInput.value + 'T00:00:00');
-                    const segundo = new Date(primer);
-                    segundo.setDate(segundo.getDate() + 2);
-                    const tercero = new Date(primer);
-                    tercero.setDate(tercero.getDate() + 5);
-                    segundoAvisoInput.value = segundo.toISOString().slice(0, 10);
-                    tercerAvisoInput.value = tercero.toISOString().slice(0, 10);
+                    recalcularAvisosDesdeFechaBase(primerAvisoInput.value);
                 });
             }
+
+            if (modoSimpleToggle && modoSimpleInput) {
+                modoSimpleToggle.addEventListener('change', function () {
+                    modoSimpleInput.value = modoSimpleToggle.checked ? '1' : '0';
+                    aplicarModoSimpleDesdeServicio();
+                });
+                modoSimpleInput.value = modoSimpleToggle.checked ? '1' : '0';
+            }
+
+            aplicarModoSimpleDesdeServicio();
         })();
     </script>
 

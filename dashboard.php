@@ -198,6 +198,25 @@ include('partials/html.php');
 
                 <?php $subtitle = "Resumen financiero"; $title = "Panel de cobros"; include('partials/page-title.php'); ?>
 
+                <div class="card border-0 shadow-sm dashboard-card mb-2">
+                    <div class="card-body py-2">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div>
+                                <h6 class="mb-0">Flujo rápido de trabajo</h6>
+                                <small class="text-muted">Accesos directos a las vistas principales del menú activo.</small>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a class="btn btn-sm btn-outline-primary" href="clientes-crear.php">1) Alta cliente</a>
+                                <a class="btn btn-sm btn-outline-primary" href="clientes-servicios-asociar.php">2) Asociar servicio</a>
+                                <a class="btn btn-sm btn-outline-primary" href="cobros-servicios-registros.php">3) Registrar cobro</a>
+                                <a class="btn btn-sm btn-outline-success" href="cobros-pagos.php">4) Registrar pago</a>
+                                <a class="btn btn-sm btn-outline-warning" href="cobros-avisos.php">5) Enviar avisos</a>
+                                <a class="btn btn-sm btn-outline-dark" href="cobros-totales.php">6) Ver totales</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row g-2">
                     <div class="col-md-6 col-xl-3 dashboard-stat-col">
                         <div class="card border-0 shadow-sm dashboard-stat dashboard-card">
