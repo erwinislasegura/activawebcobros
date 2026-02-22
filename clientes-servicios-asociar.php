@@ -5,6 +5,7 @@ $errors = [];
 $errorMessage = '';
 $success = $_GET['success'] ?? '';
 $asociacionEdit = null;
+$filtroTexto = trim((string) ($_GET['q'] ?? ''));
 
 
 function normalizar_periodicidad_servicio(string $periodicidad): string
@@ -217,20 +218,29 @@ try {
          LEFT JOIN tipos_servicios ts ON ts.id = s.tipo_servicio_id
          ORDER BY s.nombre'
     )->fetchAll();
-    $asociaciones = db()->query(
-        'SELECT cs.id,
-                c.codigo AS cliente_codigo,
-                c.nombre AS cliente,
-                s.nombre AS servicio,
-                cs.fecha_registro,
-                cs.tiempo_servicio,
-                cs.fecha_vencimiento,
-                cs.created_at
-         FROM clientes_servicios cs
-         JOIN clientes c ON c.id = cs.cliente_id
-         JOIN servicios s ON s.id = cs.servicio_id
-         ORDER BY cs.id DESC'
-    )->fetchAll();
+    $sqlAsociaciones = 'SELECT cs.id,
+                               c.codigo AS cliente_codigo,
+                               c.nombre AS cliente,
+                               s.nombre AS servicio,
+                               cs.fecha_registro,
+                               cs.tiempo_servicio,
+                               cs.fecha_vencimiento
+                        FROM clientes_servicios cs
+                        JOIN clientes c ON c.id = cs.cliente_id
+                        JOIN servicios s ON s.id = cs.servicio_id';
+
+    if ($filtroTexto !== '') {
+        $sqlAsociaciones .= ' WHERE c.nombre LIKE :q OR c.codigo LIKE :q OR s.nombre LIKE :q';
+    }
+    $sqlAsociaciones .= ' ORDER BY cs.id DESC';
+
+    $stmtAsociaciones = db()->prepare($sqlAsociaciones);
+    if ($filtroTexto !== '') {
+        $stmtAsociaciones->execute(['q' => '%' . $filtroTexto . '%']);
+    } else {
+        $stmtAsociaciones->execute();
+    }
+    $asociaciones = $stmtAsociaciones->fetchAll();
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los datos.';
 } catch (Error $e) {
@@ -340,6 +350,17 @@ try {
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Asociaciones registradas</h5>
                     <span class="badge text-bg-primary"><?php echo count($asociaciones); ?> registros</span>
+                </div>
+                <div class="card-body border-bottom">
+                    <form method="get" class="row g-2">
+                        <div class="col-md-6">
+                            <input type="text" name="q" class="form-control" placeholder="Buscar por cliente, código o servicio" value="<?php echo htmlspecialchars($filtroTexto, ENT_QUOTES, 'UTF-8'); ?>">
+                        </div>
+                        <div class="col-md-6 d-flex gap-2">
+                            <button type="submit" class="btn btn-outline-primary">Filtrar</button>
+                            <a href="clientes-servicios-asociar.php" class="btn btn-outline-secondary">Limpiar</a>
+                        </div>
+                    </form>
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
