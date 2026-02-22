@@ -1,7 +1,43 @@
 <?php
 
+function email_ensure_tables(): void
+{
+    try {
+        db()->exec("CREATE TABLE IF NOT EXISTS email_accounts (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            in_email VARCHAR(150) NOT NULL,
+            in_password VARCHAR(255) NOT NULL,
+            in_host VARCHAR(150) NOT NULL,
+            in_port INT UNSIGNED NOT NULL DEFAULT 993,
+            in_security VARCHAR(20) NOT NULL DEFAULT 'ssl',
+            out_email VARCHAR(150) NOT NULL,
+            out_name VARCHAR(150) DEFAULT NULL,
+            out_password VARCHAR(255) NOT NULL,
+            out_host VARCHAR(150) NOT NULL,
+            out_port INT UNSIGNED NOT NULL DEFAULT 587,
+            out_security VARCHAR(20) NOT NULL DEFAULT 'tls',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        db()->exec("CREATE TABLE IF NOT EXISTS email_messages (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            box VARCHAR(30) NOT NULL,
+            recipient VARCHAR(150) DEFAULT NULL,
+            subject VARCHAR(255) NOT NULL,
+            body_html MEDIUMTEXT NOT NULL,
+            status VARCHAR(30) NOT NULL DEFAULT 'draft',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY idx_email_messages_box (box)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Throwable $e) {
+    }
+}
+
 function email_get_account_config(): array
 {
+    email_ensure_tables();
     $stmt = db()->query('SELECT * FROM email_accounts ORDER BY id ASC LIMIT 1');
     $row = $stmt->fetch();
     if ($row) {
@@ -27,6 +63,7 @@ function email_get_account_config(): array
 
 function email_save_config(array $config): void
 {
+    email_ensure_tables();
     $id = db()->query('SELECT id FROM email_accounts ORDER BY id ASC LIMIT 1')->fetchColumn();
     $params = [
         $config['in_email'],
@@ -179,6 +216,7 @@ function email_mark_seen(array $config, string $folder, int $uid, bool $seen): ?
 
 function email_local_list(string $box): array
 {
+    email_ensure_tables();
     $stmt = db()->prepare('SELECT id, recipient, subject, body_html, status, created_at FROM email_messages WHERE box = ? ORDER BY id DESC LIMIT 50');
     $stmt->execute([$box]);
     return $stmt->fetchAll() ?: [];
@@ -186,12 +224,14 @@ function email_local_list(string $box): array
 
 function email_local_store(string $box, string $recipient, string $subject, string $body, string $status): void
 {
+    email_ensure_tables();
     $stmt = db()->prepare('INSERT INTO email_messages (box, recipient, subject, body_html, status) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$box, $recipient !== '' ? $recipient : null, $subject, $body, $status]);
 }
 
 function email_local_get(int $id): ?array
 {
+    email_ensure_tables();
     $stmt = db()->prepare('SELECT id, box, recipient, subject, body_html, status, created_at FROM email_messages WHERE id = ? LIMIT 1');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
