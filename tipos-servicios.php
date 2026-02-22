@@ -119,6 +119,8 @@ try {
 
                 <?php $subtitle = "Servicios"; $title = "Tipos de servicios"; include('partials/page-title.php'); ?>
 
+                <?php $flowCurrentStep = 'servicios'; include('partials/flow-quick-nav.php'); ?>
+
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Tipo de servicio guardado correctamente.</div>
                 <?php endif; ?>

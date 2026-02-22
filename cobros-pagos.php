@@ -365,6 +365,8 @@ try {
 
                 <?php $subtitle = "Cobros de servicios"; $title = "Registrar pago"; include('partials/page-title.php'); ?>
 
+                <?php $flowCurrentStep = 'pagos'; include('partials/flow-quick-nav.php'); ?>
+
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Pago registrado correctamente.</div>
                 <?php endif; ?>
