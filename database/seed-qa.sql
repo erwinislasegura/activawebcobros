@@ -527,6 +527,15 @@ INSERT INTO municipalidad (nombre, rut, direccion, telefono, correo, logo_path, 
 INSERT INTO notificacion_correos (correo_imap, password_imap, host_imap, puerto_imap, seguridad_imap, from_nombre, from_correo) VALUES
     ('notificaciones@gomuni.cl', 'DemoPass123', 'imap.gomuni.cl', 993, 'ssl', 'Go Cobros', 'notificaciones@gomuni.cl');
 
+
+INSERT INTO email_accounts (in_email, in_password, in_host, in_port, in_security, out_email, out_name, out_password, out_host, out_port, out_security) VALUES
+    ('entrada@gomuni.cl', 'DemoPass123', 'imap.gmail.com', 993, 'ssl', 'salida@gomuni.cl', 'Go Cobros', 'DemoPass123', 'smtp.gmail.com', 587, 'tls');
+
+INSERT INTO email_messages (box, recipient, subject, body_html, status) VALUES
+    ('draft', 'tesoreria@gomuni.cl', 'Borrador de aviso', '<p>Mensaje en borrador</p>', 'draft'),
+    ('outbox', 'proveedor@gomuni.cl', 'Pendiente de envío', '<p>Pendiente en cola</p>', 'error_envio'),
+    ('sent', 'cliente@gomuni.cl', 'Aviso enviado', '<p>Correo de prueba enviado</p>', 'sent');
+
 INSERT INTO notification_settings (canal_email, canal_sms, canal_app, frecuencia) VALUES
     (1, 0, 1, 'diario');
 
