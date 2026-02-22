@@ -175,6 +175,8 @@ try {
 
                 <?php $subtitle = "Cobros de servicios"; $title = "Agregar servicio"; include('partials/page-title.php'); ?>
 
+                <?php $flowCurrentStep = 'servicios'; include('partials/flow-quick-nav.php'); ?>
+
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Servicio guardado correctamente.</div>
                 <?php endif; ?>
