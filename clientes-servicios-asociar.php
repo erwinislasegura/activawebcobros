@@ -49,6 +49,49 @@ function ensure_column(string $table, string $column, string $definition): void
     }
 }
 
+
+function normalizar_periodicidad_servicio(string $periodicidad): string
+{
+    $periodicidad = mb_strtolower(trim($periodicidad), 'UTF-8');
+    $periodicidad = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $periodicidad);
+    return $periodicidad;
+}
+
+function calcular_fecha_vencimiento(string $fechaRegistro, string $periodicidad): ?string
+{
+    if ($fechaRegistro === '') {
+        return null;
+    }
+
+    $norm = normalizar_periodicidad_servicio($periodicidad);
+    $intervalos = [
+        'mensual' => '+1 month',
+        'bimestral' => '+2 months',
+        'trimestral' => '+3 months',
+        'semestral' => '+6 months',
+        'anual' => '+1 year',
+    ];
+
+    if (!isset($intervalos[$norm])) {
+        return null;
+    }
+
+    return date('Y-m-d', strtotime($fechaRegistro . ' ' . $intervalos[$norm]));
+}
+
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    if ((int) $stmt->fetchColumn() === 0) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
+
 try {
     db()->exec(
         'CREATE TABLE IF NOT EXISTS clientes_servicios (
