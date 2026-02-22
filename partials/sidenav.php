@@ -157,6 +157,7 @@
                         <ul class="side-nav sub-menu">
                             <li class="side-nav-item"><a href="municipalidad.php" class="side-nav-link">Empresa</a></li>
                             <li class="side-nav-item"><a href="notificaciones-correo.php" class="side-nav-link">Correo</a></li>
+                            <li class="side-nav-item"><a href="buzon-entrante.php" class="side-nav-link">Buzón entrante</a></li>
                             <li class="side-nav-item"><a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp</a></li>
                             <li class="side-nav-item"><a href="configuracion-avisos.php" class="side-nav-link">Plantillas avisos</a></li>
                             <li class="side-nav-item"><a href="configuracion-suspension-correo.php" class="side-nav-link">Plantilla suspensión</a></li>
