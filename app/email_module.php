@@ -1,5 +1,80 @@
 <?php
 
+
+function email_sanitize_html(string $html): string
+{
+    $allowed = '<p><br><b><strong><i><em><u><ul><ol><li><a><blockquote><h1><h2><h3><h4><h5><h6><table><thead><tbody><tr><th><td><span><div><img><hr>';
+    $clean = strip_tags($html, $allowed);
+    $clean = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $clean) ?? $clean;
+    return $clean;
+}
+
+function email_decode_part(string $content, int $encoding): string
+{
+    if ($encoding === 3) {
+        $decoded = base64_decode($content, true);
+        return $decoded !== false ? $decoded : $content;
+    }
+
+    if ($encoding === 4) {
+        return quoted_printable_decode($content);
+    }
+
+    return $content;
+}
+
+function email_extract_parts($imap, int $uid, object $structure, string $prefix = ''): array
+{
+    $items = [];
+
+    $partNumber = $prefix !== '' ? $prefix : '1';
+    $isMultipart = isset($structure->type) && (int) $structure->type === 1 && !empty($structure->parts);
+
+    if ($isMultipart) {
+        foreach ($structure->parts as $index => $part) {
+            $childNumber = $prefix === '' ? (string) ($index + 1) : $prefix . '.' . ($index + 1);
+            $items = array_merge($items, email_extract_parts($imap, $uid, $part, $childNumber));
+        }
+        return $items;
+    }
+
+    $raw = imap_fetchbody($imap, (string) $uid, $partNumber, FT_UID);
+    if ($raw === '' && $prefix === '') {
+        $raw = imap_body($imap, (string) $uid, FT_UID);
+    }
+
+    $encoding = isset($structure->encoding) ? (int) $structure->encoding : 0;
+    $decoded = email_decode_part($raw, $encoding);
+
+    $subtype = strtolower((string) ($structure->subtype ?? 'plain'));
+    $isHtml = $subtype === 'html';
+    $mime = $isHtml ? 'text/html' : 'text/plain';
+
+    $items[] = [
+        'mime' => $mime,
+        'content' => $decoded,
+    ];
+
+    return $items;
+}
+
+function email_select_best_body(array $parts): array
+{
+    foreach ($parts as $part) {
+        if ($part['mime'] === 'text/html' && trim($part['content']) !== '') {
+            return ['html' => email_sanitize_html($part['content']), 'is_html' => true];
+        }
+    }
+
+    foreach ($parts as $part) {
+        if ($part['mime'] === 'text/plain' && trim($part['content']) !== '') {
+            return ['html' => nl2br(htmlspecialchars($part['content'], ENT_QUOTES, 'UTF-8')), 'is_html' => false];
+        }
+    }
+
+    return ['html' => '<p>Sin contenido</p>', 'is_html' => false];
+}
+
 function email_ensure_tables(): void
 {
     try {
@@ -177,10 +252,21 @@ function email_fetch_message_detail(array $config, string $folder, int $uid): ar
         return ['message' => null, 'warning' => 'No se encontró el correo seleccionado.'];
     }
 
-    $body = imap_fetchbody($imap, (string) $uid, '1', FT_UID);
-    if ($body === '') {
-        $body = imap_body($imap, (string) $uid, FT_UID);
+    $structure = imap_fetchstructure($imap, (string) $uid, FT_UID);
+    $parts = [];
+    if ($structure) {
+        $parts = email_extract_parts($imap, $uid, $structure);
     }
+
+    if (empty($parts)) {
+        $fallbackBody = imap_body($imap, (string) $uid, FT_UID);
+        $parts[] = [
+            'mime' => 'text/plain',
+            'content' => $fallbackBody !== '' ? $fallbackBody : 'Sin contenido',
+        ];
+    }
+
+    $selectedBody = email_select_best_body($parts);
 
     $message = [
         'uid' => $uid,
@@ -189,7 +275,8 @@ function email_fetch_message_detail(array $config, string $folder, int $uid): ar
         'to' => isset($overview->to) ? imap_utf8((string) $overview->to) : '-',
         'date' => $overview->date ?? '-',
         'seen' => !empty($overview->seen),
-        'body' => $body,
+        'body_html' => $selectedBody['html'],
+        'body_is_html' => $selectedBody['is_html'],
     ];
 
     imap_close($imap);

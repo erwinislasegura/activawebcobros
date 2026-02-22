@@ -172,7 +172,12 @@ if ($folder === 'outbox') {
         .gmail-meta{font-size:12px;color:#9ca3af}
         .gmail-empty{color:#9ca3af;padding:24px}
         .gmail-card{background:#0f172a;border:1px solid #374151;border-radius:14px;padding:14px;margin-bottom:14px}
-        .gmail-read-body{background:#0b1220;border:1px solid #374151;border-radius:10px;padding:12px;color:#d1d5db;min-height:220px}
+        .gmail-read-body{background:#0b1220;border:1px solid #374151;border-radius:10px;padding:12px;color:#d1d5db;min-height:220px;overflow:auto}
+        .email-rendered{color:#e5e7eb;line-height:1.5}
+        .email-rendered a{color:#60a5fa}
+        .email-rendered img{max-width:100%;height:auto;border-radius:6px}
+        .email-rendered table{width:100%;border-collapse:collapse}
+        .email-rendered td,.email-rendered th{border:1px solid #374151;padding:6px}
     </style>
 </head>
 <body>
@@ -309,7 +314,7 @@ if ($folder === 'outbox') {
                             </div>
                             <div class="gmail-read-body">
                                 <?php if (isset($selectedMessage['body_html'])) : ?>
-                                    <?php echo $selectedMessage['body_html']; ?>
+                                    <div class="email-rendered"><?php echo $selectedMessage['body_html']; ?></div>
                                 <?php else : ?>
                                     <pre style="white-space:pre-wrap;color:#d1d5db"><?php echo htmlspecialchars((string) ($selectedMessage['body'] ?? 'Sin contenido'), ENT_QUOTES, 'UTF-8'); ?></pre>
                                 <?php endif; ?>
