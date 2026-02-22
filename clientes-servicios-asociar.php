@@ -4,6 +4,50 @@ require __DIR__ . '/app/bootstrap.php';
 $errors = [];
 $errorMessage = '';
 $success = $_GET['success'] ?? '';
+$asociacionEdit = null;
+
+
+function normalizar_periodicidad_servicio(string $periodicidad): string
+{
+    $periodicidad = mb_strtolower(trim($periodicidad), 'UTF-8');
+    $periodicidad = str_replace(['á', 'é', 'í', 'ó', 'ú'], ['a', 'e', 'i', 'o', 'u'], $periodicidad);
+    return $periodicidad;
+}
+
+function calcular_fecha_vencimiento(string $fechaRegistro, string $periodicidad): ?string
+{
+    if ($fechaRegistro === '') {
+        return null;
+    }
+
+    $norm = normalizar_periodicidad_servicio($periodicidad);
+    $intervalos = [
+        'mensual' => '+1 month',
+        'bimestral' => '+2 months',
+        'trimestral' => '+3 months',
+        'semestral' => '+6 months',
+        'anual' => '+1 year',
+    ];
+
+    if (!isset($intervalos[$norm])) {
+        return null;
+    }
+
+    return date('Y-m-d', strtotime($fechaRegistro . ' ' . $intervalos[$norm]));
+}
+
+function ensure_column(string $table, string $column, string $definition): void
+{
+    $dbName = $GLOBALS['config']['db']['name'] ?? '';
+    if ($dbName === '') {
+        return;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $stmt->execute([$dbName, $table, $column]);
+    if ((int) $stmt->fetchColumn() === 0) {
+        db()->exec(sprintf('ALTER TABLE %s ADD COLUMN %s %s', $table, $column, $definition));
+    }
+}
 
 
 function normalizar_periodicidad_servicio(string $periodicidad): string
@@ -107,11 +151,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         }
     }
 
-    if ($action === 'create') {
+    if ($action === 'create' || $action === 'update') {
+        $asociacionId = (int) ($_POST['id'] ?? 0);
         $clienteId = (int) ($_POST['cliente_id'] ?? 0);
         $servicioId = (int) ($_POST['servicio_id'] ?? 0);
         $fechaRegistro = trim((string) ($_POST['fecha_registro'] ?? ''));
         $tiempoServicio = trim((string) ($_POST['tiempo_servicio'] ?? 'Mensual'));
+
+        if ($action === 'update' && $asociacionId <= 0) {
+            $errors[] = 'No se pudo identificar la asociación a editar.';
+        }
 
         if ($clienteId <= 0) {
             $errors[] = 'Selecciona un cliente válido.';
@@ -130,20 +179,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
 
         if (empty($errors)) {
             try {
-                $stmtExists = db()->prepare('SELECT COUNT(*) FROM clientes_servicios WHERE cliente_id = ? AND servicio_id = ?');
-                $stmtExists->execute([$clienteId, $servicioId]);
+                $stmtExists = db()->prepare('SELECT COUNT(*) FROM clientes_servicios WHERE cliente_id = ? AND servicio_id = ? AND id <> ?');
+                $stmtExists->execute([$clienteId, $servicioId, $asociacionId]);
                 if ((int) $stmtExists->fetchColumn() > 0) {
                     $errors[] = 'Esta asociación ya existe.';
                 } else {
-                    $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, fecha_registro, tiempo_servicio, fecha_vencimiento) VALUES (?, ?, ?, ?, ?)');
-                    $stmtInsert->execute([$clienteId, $servicioId, $fechaRegistro, $tiempoServicio, $fechaVencimiento]);
-                    redirect('clientes-servicios-asociar.php?success=1');
+                    if ($action === 'update') {
+                        $stmtUpdate = db()->prepare('UPDATE clientes_servicios SET cliente_id = ?, servicio_id = ?, fecha_registro = ?, tiempo_servicio = ?, fecha_vencimiento = ? WHERE id = ? LIMIT 1');
+                        $stmtUpdate->execute([$clienteId, $servicioId, $fechaRegistro, $tiempoServicio, $fechaVencimiento, $asociacionId]);
+                        redirect('clientes-servicios-asociar.php?success=updated');
+                    } else {
+                        $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, fecha_registro, tiempo_servicio, fecha_vencimiento) VALUES (?, ?, ?, ?, ?)');
+                        $stmtInsert->execute([$clienteId, $servicioId, $fechaRegistro, $tiempoServicio, $fechaVencimiento]);
+                        redirect('clientes-servicios-asociar.php?success=1');
+                    }
                 }
             } catch (Exception $e) {
                 $errorMessage = 'No se pudo guardar la asociación.';
             } catch (Error $e) {
                 $errorMessage = 'No se pudo guardar la asociación.';
             }
+        }
+    }
+}
+
+if (isset($_GET['id'])) {
+    $editId = (int) $_GET['id'];
+    if ($editId > 0) {
+        try {
+            $stmt = db()->prepare('SELECT id, cliente_id, servicio_id, fecha_registro, tiempo_servicio FROM clientes_servicios WHERE id = ? LIMIT 1');
+            $stmt->execute([$editId]);
+            $asociacionEdit = $stmt->fetch() ?: null;
+            if (!$asociacionEdit) {
+                $errorMessage = 'No se encontró la asociación a editar.';
+            }
+        } catch (Exception $e) {
+            $errorMessage = 'No se pudo cargar la asociación para edición.';
+        } catch (Error $e) {
+            $errorMessage = 'No se pudo cargar la asociación para edición.';
         }
     }
 }
@@ -199,6 +272,7 @@ try {
 
             <?php if ($success === '1') : ?><div class="alert alert-success">Asociación creada correctamente.</div><?php endif; ?>
             <?php if ($success === 'deleted') : ?><div class="alert alert-success">Asociación eliminada correctamente.</div><?php endif; ?>
+            <?php if ($success === 'updated') : ?><div class="alert alert-success">Asociación actualizada correctamente.</div><?php endif; ?>
             <?php if ($errorMessage !== '') : ?><div class="alert alert-danger"><?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?></div><?php endif; ?>
             <?php if (!empty($errors)) : ?>
                 <div class="alert alert-danger">
@@ -209,17 +283,20 @@ try {
             <?php endif; ?>
 
             <div class="card mb-3">
-                <div class="card-header"><h5 class="mb-0">Nueva asociación</h5></div>
+                <div class="card-header"><h5 class="mb-0"><?php echo $asociacionEdit ? 'Editar asociación' : 'Nueva asociación'; ?></h5></div>
                 <div class="card-body">
                     <form method="post" class="row g-3">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                        <input type="hidden" name="action" value="create">
+                        <input type="hidden" name="action" value="<?php echo $asociacionEdit ? 'update' : 'create'; ?>">
+                        <?php if ($asociacionEdit) : ?>
+                            <input type="hidden" name="id" value="<?php echo (int) $asociacionEdit['id']; ?>">
+                        <?php endif; ?>
                         <div class="col-md-6">
                             <label class="form-label">Cliente</label>
                             <select name="cliente_id" class="form-select" required>
                                 <option value="">Selecciona un cliente</option>
                                 <?php foreach ($clientes as $cliente) : ?>
-                                    <option value="<?php echo (int) $cliente['id']; ?>"><?php echo htmlspecialchars(($cliente['codigo'] ?? '') . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <option value="<?php echo (int) $cliente['id']; ?>" <?php echo ((int) ($_POST['cliente_id'] ?? ($asociacionEdit['cliente_id'] ?? 0)) === (int) $cliente['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars(($cliente['codigo'] ?? '') . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -230,6 +307,7 @@ try {
                                 <?php foreach ($servicios as $servicio) : ?>
                                     <option
                                         value="<?php echo (int) $servicio['id']; ?>"
+                                        <?php echo ((int) ($_POST['servicio_id'] ?? ($asociacionEdit['servicio_id'] ?? 0)) === (int) $servicio['id']) ? 'selected' : ''; ?>
                                         data-nombre="<?php echo htmlspecialchars((string) ($servicio['nombre'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-tipo="<?php echo htmlspecialchars((string) ($servicio['tipo_servicio'] ?? 'Sin tipo'), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-monto="<?php echo htmlspecialchars('$' . number_format((float) ($servicio['monto'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>"
@@ -245,12 +323,12 @@ try {
 
                         <div class="col-md-3">
                             <label class="form-label" for="fecha-registro">Fecha de registro</label>
-                            <input type="date" id="fecha-registro" name="fecha_registro" class="form-control" value="<?php echo htmlspecialchars($_POST['fecha_registro'] ?? date('Y-m-d'), ENT_QUOTES, 'UTF-8'); ?>" required>
+                            <input type="date" id="fecha-registro" name="fecha_registro" class="form-control" value="<?php echo htmlspecialchars($_POST['fecha_registro'] ?? ($asociacionEdit['fecha_registro'] ?? date('Y-m-d')), ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label" for="tiempo-servicio">Tiempo de servicio</label>
                             <select id="tiempo-servicio" name="tiempo_servicio" class="form-select" required>
-                                <?php $tiempoServicioActual = $_POST['tiempo_servicio'] ?? 'Mensual'; ?>
+                                <?php $tiempoServicioActual = $_POST['tiempo_servicio'] ?? ($asociacionEdit['tiempo_servicio'] ?? 'Mensual'); ?>
                                 <?php foreach (['Mensual', 'Bimestral', 'Trimestral', 'Semestral', 'Anual'] as $periodo) : ?>
                                     <option value="<?php echo $periodo; ?>" <?php echo $tiempoServicioActual === $periodo ? 'selected' : ''; ?>><?php echo $periodo; ?></option>
                                 <?php endforeach; ?>
@@ -268,7 +346,10 @@ try {
                             </div>
                         </div>
                         <div class="col-12">
-                            <button type="submit" class="btn btn-primary">Guardar asociación</button>
+                            <button type="submit" class="btn btn-primary"><?php echo $asociacionEdit ? 'Actualizar asociación' : 'Guardar asociación'; ?></button>
+                            <?php if ($asociacionEdit) : ?>
+                                <a href="clientes-servicios-asociar.php" class="btn btn-light">Cancelar edición</a>
+                            <?php endif; ?>
                         </div>
                     </form>
                 </div>
@@ -294,6 +375,7 @@ try {
                                 <td><?php echo htmlspecialchars(!empty($item['fecha_vencimiento']) ? date('d/m/Y', strtotime((string) $item['fecha_vencimiento'])) : '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string) $item['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td class="text-end">
+                                    <a href="clientes-servicios-asociar.php?id=<?php echo (int) $item['id']; ?>" class="btn btn-sm btn-outline-secondary">Editar</a>
                                     <form method="post" class="d-inline" onsubmit="return confirm('¿Eliminar esta asociación?');">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                                         <input type="hidden" name="action" value="delete">
