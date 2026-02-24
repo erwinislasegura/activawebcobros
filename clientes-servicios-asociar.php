@@ -67,6 +67,94 @@ function ensure_column(string $table, string $column, string $definition): void
     }
 }
 
+
+function normalize_email_list(string $raw): array
+{
+    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
+    $emails = [];
+    foreach ($parts as $email) {
+        $email = mb_strtolower(trim($email), 'UTF-8');
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+        if (!in_array($email, $emails, true)) {
+            $emails[] = $email;
+        }
+    }
+    return $emails;
+}
+
+function enviar_correo_cotizacion(array $cliente, array $lineas, string $codigoCotizacion, string $nota): bool
+{
+    if (empty($cliente['correo'])) {
+        return false;
+    }
+
+    $destinatarios = normalize_email_list((string) $cliente['correo']);
+    if (empty($destinatarios)) {
+        return false;
+    }
+
+    $municipalidad = get_municipalidad();
+    $logoPath = $municipalidad['logo_path'] ?? 'assets/images/logo.png';
+    $logoUrl = preg_match('/^https?:\/\//', $logoPath) ? $logoPath : base_url() . '/' . ltrim($logoPath, '/');
+    $fromConfig = db()->query('SELECT * FROM notificacion_correos LIMIT 1')->fetch() ?: [];
+    $fromEmail = $fromConfig['from_correo'] ?? $fromConfig['correo_imap'] ?? '';
+    $fromName = $fromConfig['from_nombre'] ?? ($municipalidad['nombre'] ?? 'Notificaciones');
+
+    $defaultSubject = 'Cotización {{codigo_cotizacion}} - {{municipalidad_nombre}}';
+    $defaultBody = '<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:16px;"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:18px 22px;background:#1D4ED8;color:#fff;"><strong>{{municipalidad_nombre}}</strong></td></tr><tr><td style="padding:18px 22px;color:#111827;"><p>Estimado/a <strong>{{cliente_nombre}}</strong>,</p><p>Te compartimos los servicios asociados en la cotización <strong>{{codigo_cotizacion}}</strong>.</p>{{detalle_servicios}}<p><strong>Total:</strong> {{total_cotizacion}}</p><p>{{nota_cotizacion}}</p></td></tr></table></body></html>';
+
+    try {
+        db()->exec('CREATE TABLE IF NOT EXISTS email_templates (id INT UNSIGNED NOT NULL AUTO_INCREMENT, template_key VARCHAR(80) NOT NULL, subject VARCHAR(200) NOT NULL, body_html MEDIUMTEXT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY email_templates_key_unique (template_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $stmtTpl = db()->prepare('SELECT subject, body_html FROM email_templates WHERE template_key = ? LIMIT 1');
+        $stmtTpl->execute(['cotizacion_cliente']);
+        $tpl = $stmtTpl->fetch() ?: ['subject' => $defaultSubject, 'body_html' => $defaultBody];
+    } catch (Exception $e) {
+        $tpl = ['subject' => $defaultSubject, 'body_html' => $defaultBody];
+    } catch (Error $e) {
+        $tpl = ['subject' => $defaultSubject, 'body_html' => $defaultBody];
+    }
+
+    $rows = '';
+    $total = 0.0;
+    foreach ($lineas as $linea) {
+        $total += (float) ($linea['total'] ?? 0);
+        $rows .= '<tr><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars((string) ($linea['servicio_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars((string) ($linea['tiempo_servicio'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . number_format((float) ($linea['descuento_porcentaje'] ?? 0), 2, ',', '.') . '%</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">$' . number_format((float) ($linea['total'] ?? 0), 2, ',', '.') . '</td></tr>';
+    }
+
+    $detalleServicios = '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse;margin:12px 0;"><thead><tr><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Servicio</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Periodicidad</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Desc. %</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Total</th></tr></thead><tbody>' . $rows . '</tbody></table>';
+
+    $repl = [
+        '{{municipalidad_nombre}}' => htmlspecialchars($municipalidad['nombre'] ?? 'Municipalidad', ENT_QUOTES, 'UTF-8'),
+        '{{municipalidad_logo}}' => htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8'),
+        '{{cliente_nombre}}' => htmlspecialchars((string) ($cliente['nombre'] ?? 'Cliente'), ENT_QUOTES, 'UTF-8'),
+        '{{codigo_cotizacion}}' => htmlspecialchars($codigoCotizacion, ENT_QUOTES, 'UTF-8'),
+        '{{detalle_servicios}}' => $detalleServicios,
+        '{{nota_cotizacion}}' => htmlspecialchars($nota !== '' ? $nota : 'Sin nota adicional.', ENT_QUOTES, 'UTF-8'),
+        '{{total_cotizacion}}' => '$' . number_format($total, 2, ',', '.'),
+    ];
+
+    $subject = strtr((string) ($tpl['subject'] ?? $defaultSubject), $repl);
+    $body = strtr((string) ($tpl['body_html'] ?? $defaultBody), $repl);
+
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/html; charset=UTF-8',
+    ];
+    if ($fromEmail !== '') {
+        $headers[] = 'From: ' . ($fromName !== '' ? $fromName . ' <' . $fromEmail . '>' : $fromEmail);
+        $headers[] = 'Reply-To: ' . $fromEmail;
+    }
+
+    $ok = true;
+    foreach ($destinatarios as $correo) {
+        $ok = @mail($correo, $subject, $body, implode("\r\n", $headers)) && $ok;
+    }
+
+    return $ok;
+}
+
 try {
     db()->exec(
         'CREATE TABLE IF NOT EXISTS clientes_servicios (
@@ -96,7 +184,8 @@ try {
     ensure_column('clientes_servicios', 'enviar_correo', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER fecha_vencimiento');
     ensure_column('clientes_servicios', 'nota_cotizacion', 'TEXT NULL AFTER enviar_correo');
     ensure_column('clientes_servicios', 'subtotal', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER nota_cotizacion');
-    ensure_column('clientes_servicios', 'descuento_monto', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER subtotal');
+    ensure_column('clientes_servicios', 'descuento_porcentaje', 'DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER subtotal');
+    ensure_column('clientes_servicios', 'descuento_monto', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_porcentaje');
     ensure_column('clientes_servicios', 'total', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_monto');
 
     db()->exec('UPDATE clientes_servicios SET tiempo_servicio = "Mensual" WHERE tiempo_servicio IS NULL OR TRIM(tiempo_servicio) = ""');
@@ -152,7 +241,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         }
 
         $lineas = [];
-        $subtotalCotizacion = 0.0;
 
         if (empty($errors)) {
             try {
@@ -161,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 foreach ($serviciosIds as $idx => $servicioRaw) {
                     $servicioId = (int) $servicioRaw;
                     $periodicidad = trim((string) ($periodicidades[$idx] ?? 'Mensual'));
-                    $descuentoLinea = (float) ($descuentos[$idx] ?? 0);
+                    $descuentoPorcentaje = (float) ($descuentos[$idx] ?? 0);
 
                     if ($servicioId <= 0) {
                         $errors[] = 'Hay un servicio inválido en la cotización.';
@@ -182,23 +270,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                     }
 
                     $monto = (float) ($servicio['monto'] ?? 0);
-                    if ($descuentoLinea < 0) {
-                        $descuentoLinea = 0;
+                    if ($descuentoPorcentaje < 0) {
+                        $descuentoPorcentaje = 0;
                     }
-                    if ($descuentoLinea > $monto) {
-                        $descuentoLinea = $monto;
+                    if ($descuentoPorcentaje > 100) {
+                        $descuentoPorcentaje = 100;
                     }
+                    $descuentoLinea = round(($monto * $descuentoPorcentaje) / 100, 2);
                     $totalLinea = $monto - $descuentoLinea;
 
                     $lineas[] = [
                         'servicio_id' => $servicioId,
+                        'servicio_nombre' => (string) ($servicio['nombre'] ?? 'Servicio'),
                         'fecha_vencimiento' => $fechaVencimiento,
                         'tiempo_servicio' => $periodicidad,
                         'subtotal' => $monto,
+                        'descuento_porcentaje' => $descuentoPorcentaje,
                         'descuento_monto' => $descuentoLinea,
                         'total' => $totalLinea,
                     ];
-                    $subtotalCotizacion += $monto;
                 }
             } catch (Exception $e) {
                 $errors[] = 'No se pudieron validar los servicios seleccionados.';
@@ -211,7 +301,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
             try {
                 $codigoCotizacion = 'COT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
                 db()->beginTransaction();
-                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, subtotal, descuento_monto, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, subtotal, descuento_porcentaje, descuento_monto, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 foreach ($lineas as $linea) {
                     $stmtInsert->execute([
                         $clienteId,
@@ -223,11 +313,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                         $enviarCorreo,
                         $notaCotizacion !== '' ? $notaCotizacion : null,
                         $linea['subtotal'],
+                        $linea['descuento_porcentaje'],
                         $linea['descuento_monto'],
                         $linea['total'],
                     ]);
                 }
                 db()->commit();
+
+                if ($enviarCorreo === 1) {
+                    try {
+                        $stmtClienteCorreo = db()->prepare('SELECT nombre, correo FROM clientes WHERE id = ? LIMIT 1');
+                        $stmtClienteCorreo->execute([$clienteId]);
+                        $clienteCorreo = $stmtClienteCorreo->fetch() ?: [];
+                        enviar_correo_cotizacion($clienteCorreo, $lineas, $codigoCotizacion, $notaCotizacion);
+                    } catch (Exception $e) {
+                    } catch (Error $e) {
+                    }
+                }
+
                 redirect('clientes-servicios-asociar.php?success=quote');
             } catch (Exception $e) {
                 if (db()->inTransaction()) {
@@ -344,6 +447,7 @@ try {
                                cs.tiempo_servicio,
                                cs.fecha_vencimiento,
                                cs.subtotal,
+                               cs.descuento_porcentaje,
                                cs.descuento_monto,
                                cs.total,
                                cs.enviar_correo,
@@ -431,7 +535,7 @@ try {
                                             <th>Servicio</th>
                                             <th>Periodicidad</th>
                                             <th>Precio</th>
-                                            <th>Descuento</th>
+                                            <th>Descuento %</th>
                                             <th>Total</th>
                                             <th></th>
                                         </tr>
@@ -475,10 +579,10 @@ try {
                 </div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped mb-0">
-                        <thead><tr><th>Cotización</th><th>Cliente</th><th>Servicio</th><th>Tiempo</th><th>Subtotal</th><th>Descuento</th><th>Total</th><th class="text-end">Acción</th></tr></thead>
+                        <thead><tr><th>Cotización</th><th>Cliente</th><th>Servicio</th><th>Tiempo</th><th>Subtotal</th><th>Descuento %</th><th>Desc. $</th><th>Total</th><th class="text-end">Acción</th></tr></thead>
                         <tbody>
                         <?php if (empty($asociaciones)) : ?>
-                            <tr><td colspan="8" class="text-center text-muted">No hay asociaciones registradas.</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted">No hay asociaciones registradas.</td></tr>
                         <?php else : foreach ($asociaciones as $item) : ?>
                             <tr>
                                 <td>
@@ -489,6 +593,7 @@ try {
                                 <td><?php echo htmlspecialchars($item['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars($item['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>$<?php echo htmlspecialchars(number_format((float) ($item['subtotal'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars(number_format((float) ($item['descuento_porcentaje'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>%</td>
                                 <td>$<?php echo htmlspecialchars(number_format((float) ($item['descuento_monto'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
                                     <div>$<?php echo htmlspecialchars(number_format((float) ($item['total'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></div>
@@ -565,10 +670,11 @@ try {
         let descuento = Number(inputDescuento.value || 0);
 
         if (descuento < 0) descuento = 0;
-        if (descuento > monto) descuento = monto;
+        if (descuento > 100) descuento = 100;
         inputDescuento.value = descuento.toFixed(2);
 
-        const total = monto - descuento;
+        const descuentoMonto = (monto * descuento) / 100;
+        const total = monto - descuentoMonto;
         precioEl.textContent = formatoMoneda(monto);
         totalEl.textContent = formatoMoneda(total);
     }
@@ -581,7 +687,8 @@ try {
             const option = selectServicio.options[selectServicio.selectedIndex];
             const monto = Number(option?.dataset?.monto || 0);
             const descuento = Number(inputDescuento.value || 0);
-            total += Math.max(0, monto - descuento);
+            const descuentoMonto = (monto * descuento) / 100;
+            total += Math.max(0, monto - descuentoMonto);
         });
         totalCotizacion.textContent = formatoMoneda(total);
     }
@@ -604,7 +711,7 @@ try {
                 </select>
             </td>
             <td class="js-precio">$0</td>
-            <td><input type="number" name="descuento[]" class="form-control form-control-sm js-descuento" min="0" step="0.01" value="0"></td>
+            <td><div class="input-group input-group-sm"><input type="number" name="descuento[]" class="form-control js-descuento" min="0" max="100" step="0.01" value="0"><span class="input-group-text">%</span></div></td>
             <td class="js-total-linea">$0</td>
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger js-eliminar">Quitar</button></td>
         `;
