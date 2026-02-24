@@ -1,17 +1,17 @@
 -- Actualización módulo cotización cliente-servicio
 ALTER TABLE clientes_servicios
-    ADD COLUMN IF NOT EXISTS codigo_cotizacion VARCHAR(40) NULL AFTER servicio_id,
-    ADD COLUMN IF NOT EXISTS fecha_registro DATE NULL AFTER codigo_cotizacion,
-    ADD COLUMN IF NOT EXISTS tiempo_servicio VARCHAR(30) NULL AFTER fecha_registro,
-    ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE NULL AFTER tiempo_servicio,
-    ADD COLUMN IF NOT EXISTS enviar_correo TINYINT(1) NOT NULL DEFAULT 0 AFTER fecha_vencimiento,
-    ADD COLUMN IF NOT EXISTS nota_cotizacion TEXT NULL AFTER enviar_correo,
-    ADD COLUMN IF NOT EXISTS subtotal DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER nota_cotizacion,
-    ADD COLUMN IF NOT EXISTS descuento_porcentaje DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER subtotal,
-    ADD COLUMN IF NOT EXISTS descuento_monto DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_porcentaje,
-    ADD COLUMN IF NOT EXISTS total DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_monto,
-    ADD COLUMN IF NOT EXISTS validez_dias INT NOT NULL DEFAULT 5 AFTER total,
-    ADD COLUMN IF NOT EXISTS fecha_validez DATE NULL AFTER validez_dias;
+    ADD COLUMN codigo_cotizacion VARCHAR(40) NULL AFTER servicio_id,
+    ADD COLUMN fecha_registro DATE NULL AFTER codigo_cotizacion,
+    ADD COLUMN tiempo_servicio VARCHAR(30) NULL AFTER fecha_registro,
+    ADD COLUMN fecha_vencimiento DATE NULL AFTER tiempo_servicio,
+    ADD COLUMN enviar_correo TINYINT(1) NOT NULL DEFAULT 0 AFTER fecha_vencimiento,
+    ADD COLUMN nota_cotizacion TEXT NULL AFTER enviar_correo,
+    ADD COLUMN subtotal DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER nota_cotizacion,
+    ADD COLUMN descuento_porcentaje TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER subtotal,
+    ADD COLUMN descuento_monto DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_porcentaje,
+    ADD COLUMN total DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_monto,
+    ADD COLUMN validez_dias INT NOT NULL DEFAULT 5 AFTER total,
+    ADD COLUMN fecha_validez DATE NULL AFTER validez_dias;
 
 CREATE TABLE IF NOT EXISTS email_templates (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
