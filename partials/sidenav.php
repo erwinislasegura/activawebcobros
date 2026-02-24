@@ -185,6 +185,7 @@
                             <li class="side-nav-item"><a href="notificaciones-correo.php" class="side-nav-link">Correo avisos</a></li>
                             <li class="side-nav-item"><a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp</a></li>
                             <li class="side-nav-item"><a href="configuracion-avisos.php" class="side-nav-link">Plantillas avisos</a></li>
+                            <li class="side-nav-item"><a href="configuracion-cotizacion-correo.php" class="side-nav-link">Plantilla cotización</a></li>
                             <li class="side-nav-item"><a href="configuracion-suspension-correo.php" class="side-nav-link">Plantilla suspensión</a></li>
                         </ul>
                     </div>
