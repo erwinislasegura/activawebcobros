@@ -11,6 +11,7 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             codigo VARCHAR(20) NOT NULL,
             nombre VARCHAR(150) NOT NULL,
+            nombre_empresa VARCHAR(180) NULL,
             correo VARCHAR(150) NULL,
             telefono VARCHAR(50) NULL,
             direccion VARCHAR(180) NULL,
@@ -43,6 +44,7 @@ function ensure_column(string $table, string $column, string $definition): void
 
 try {
     ensure_column('clientes', 'sitio_web', 'VARCHAR(180) NULL');
+    ensure_column('clientes', 'nombre_empresa', 'VARCHAR(180) NULL AFTER nombre');
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la tabla de clientes.';
 } catch (Error $e) {
@@ -104,7 +106,7 @@ if (isset($_GET['id'])) {
     $editId = (int) $_GET['id'];
     if ($editId > 0) {
         try {
-            $stmt = db()->prepare('SELECT id, nombre, correo, telefono, direccion, sitio_web, estado FROM clientes WHERE id = ?');
+            $stmt = db()->prepare('SELECT id, nombre, nombre_empresa, correo, telefono, direccion, sitio_web, estado FROM clientes WHERE id = ?');
             $stmt->execute([$editId]);
             $clienteEdit = $stmt->fetch() ?: null;
         } catch (Exception $e) {
@@ -115,6 +117,7 @@ if (isset($_GET['id'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_csrf($_POST['csrf_token'] ?? null)) {
     $nombre = trim($_POST['nombre'] ?? '');
+    $nombreEmpresa = trim($_POST['nombre_empresa'] ?? '');
     $correoInput = trim($_POST['correo'] ?? '');
     $correos = $correoInput !== '' ? normalize_email_list($correoInput) : [];
     $telefono = trim($_POST['telefono'] ?? '');
@@ -132,9 +135,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
     if (empty($errors)) {
         try {
             if ($clienteEdit && isset($clienteEdit['id'])) {
-                $stmt = db()->prepare('UPDATE clientes SET nombre = ?, correo = ?, telefono = ?, direccion = ?, sitio_web = ?, estado = ? WHERE id = ?');
+                $stmt = db()->prepare('UPDATE clientes SET nombre = ?, nombre_empresa = ?, correo = ?, telefono = ?, direccion = ?, sitio_web = ?, estado = ? WHERE id = ?');
                 $stmt->execute([
                     $nombre,
+                    $nombreEmpresa !== '' ? $nombreEmpresa : null,
                     $correoInput !== '' ? implode(', ', $correos) : null,
                     $telefono !== '' ? $telefono : null,
                     $direccion !== '' ? $direccion : null,
@@ -154,10 +158,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
                 }
 
                 $colorHex = color_por_codigo($codigo);
-                $stmt = db()->prepare('INSERT INTO clientes (codigo, nombre, correo, telefono, direccion, sitio_web, color_hex, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = db()->prepare('INSERT INTO clientes (codigo, nombre, nombre_empresa, correo, telefono, direccion, sitio_web, color_hex, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $codigo,
                     $nombre,
+                    $nombreEmpresa !== '' ? $nombreEmpresa : null,
                     $correoInput !== '' ? implode(', ', $correos) : null,
                     $telefono !== '' ? $telefono : null,
                     $direccion !== '' ? $direccion : null,
@@ -166,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
                     $estado,
                 ]);
             }
-            redirect('clientes-crear.php?success=1');
+            redirect('clientes-crear.php?success=1&empresa=' . urlencode($nombreEmpresa !== '' ? $nombreEmpresa : $nombre));
         } catch (Exception $e) {
             $errorMessage = 'No se pudo guardar el cliente.';
         } catch (Error $e) {
@@ -177,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action']) && verify_
 
 $clientes = [];
 try {
-    $clientes = db()->query('SELECT id, codigo, nombre, correo, telefono, direccion, sitio_web, color_hex, estado, created_at FROM clientes ORDER BY id DESC')->fetchAll();
+    $clientes = db()->query('SELECT id, codigo, nombre, nombre_empresa, correo, telefono, direccion, sitio_web, color_hex, estado, created_at FROM clientes ORDER BY id DESC')->fetchAll();
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los clientes.';
 } catch (Error $e) {
@@ -211,7 +216,7 @@ try {
                 <?php $flowCurrentStep = 'clientes'; include('partials/flow-quick-nav.php'); ?>
 
                 <?php if ($success === '1') : ?>
-                    <div class="alert alert-success">Cliente guardado correctamente.</div>
+                    <div class="alert alert-success">Cliente guardado correctamente<?php echo isset($_GET['empresa']) && trim((string) $_GET['empresa']) !== '' ? ': ' . htmlspecialchars((string) $_GET['empresa'], ENT_QUOTES, 'UTF-8') : ''; ?>.</div>
                 <?php endif; ?>
 
                 <?php if ($errorMessage !== '') : ?>
@@ -239,6 +244,10 @@ try {
                                         <div class="col-md-6">
                                             <label class="form-label" for="cliente-nombre">Nombre</label>
                                             <input type="text" id="cliente-nombre" name="nombre" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['nombre'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label" for="cliente-empresa">Nombre empresa</label>
+                                            <input type="text" id="cliente-empresa" name="nombre_empresa" class="form-control" value="<?php echo htmlspecialchars($clienteEdit['nombre_empresa'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label" for="cliente-correo">Correos</label>
@@ -306,7 +315,7 @@ try {
                                                 <?php foreach ($clientes as $cliente) : ?>
                                                     <tr>
                                                         <td><?php echo htmlspecialchars($cliente['codigo'], ENT_QUOTES, 'UTF-8'); ?></td>
-                                                        <td><?php echo htmlspecialchars($cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        <td><div><?php echo htmlspecialchars($cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></div><small class="text-muted"><?php echo htmlspecialchars($cliente['nombre_empresa'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small></td>
                                                         <td>
                                                             <div><?php echo htmlspecialchars($cliente['correo'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></div>
                                                             <small class="text-muted"><?php echo htmlspecialchars($cliente['telefono'] ?? '-', ENT_QUOTES, 'UTF-8'); ?></small>
