@@ -28,6 +28,8 @@ function calcular_fecha_vencimiento(string $fechaRegistro, string $periodicidad)
         'trimestral' => '+3 months',
         'semestral' => '+6 months',
         'anual' => '+1 year',
+        'un pago' => '+0 day',
+        'unpago' => '+0 day',
     ];
 
     if (!isset($intervalos[$norm])) {
@@ -84,7 +86,7 @@ function normalize_email_list(string $raw): array
     return $emails;
 }
 
-function enviar_correo_cotizacion(array $cliente, array $lineas, string $codigoCotizacion, string $nota, int $validezDias, string $fechaValidez): bool
+function enviar_correo_cotizacion(array $cliente, array $lineas, string $codigoCotizacion, string $nota, int $validezDias, string $fechaValidez, string $correoCco = ''): bool
 {
     if (empty($cliente['correo'])) {
         return false;
@@ -153,6 +155,11 @@ function enviar_correo_cotizacion(array $cliente, array $lineas, string $codigoC
         $headers[] = 'Reply-To: ' . $fromEmail;
     }
 
+    $bccList = normalize_email_list($correoCco);
+    if (!empty($bccList)) {
+        $headers[] = 'Bcc: ' . implode(', ', $bccList);
+    }
+
     $ok = true;
     foreach ($destinatarios as $correo) {
         $ok = @mail($correo, $subject, $body, implode("\r\n", $headers)) && $ok;
@@ -189,6 +196,7 @@ try {
     ensure_column('clientes_servicios', 'codigo_cotizacion', 'VARCHAR(40) NULL AFTER servicio_id');
     ensure_column('clientes_servicios', 'enviar_correo', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER fecha_vencimiento');
     ensure_column('clientes_servicios', 'nota_cotizacion', 'TEXT NULL AFTER enviar_correo');
+    ensure_column('clientes_servicios', 'correo_cco', 'VARCHAR(255) NULL AFTER nota_cotizacion');
     ensure_column('clientes_servicios', 'subtotal', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER nota_cotizacion');
     ensure_column('clientes_servicios', 'descuento_porcentaje', 'TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER subtotal');
     ensure_column('clientes_servicios', 'descuento_monto', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_porcentaje');
@@ -203,6 +211,7 @@ try {
     db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 3 MONTH) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "trimestral"');
     db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 6 MONTH) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "semestral"');
     db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = DATE_ADD(fecha_registro, INTERVAL 1 YEAR) WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND LOWER(tiempo_servicio) = "anual"');
+    db()->exec('UPDATE clientes_servicios SET fecha_vencimiento = fecha_registro WHERE fecha_registro IS NOT NULL AND fecha_vencimiento IS NULL AND (LOWER(tiempo_servicio) = "un pago" OR LOWER(REPLACE(tiempo_servicio, " ", "")) = "unpago")');
 } catch (Exception $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudo actualizar la estructura de asociaciones.';
 } catch (Error $e) {
@@ -234,6 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         $fechaRegistro = trim((string) ($_POST['fecha_registro'] ?? ''));
         $enviarCorreo = isset($_POST['enviar_correo']) ? 1 : 0;
         $notaCotizacion = trim((string) ($_POST['nota_cotizacion'] ?? ''));
+        $correoCco = trim((string) ($_POST['correo_cco'] ?? ''));
         $serviciosIds = $_POST['servicio_id'] ?? [];
         $periodicidades = $_POST['tiempo_servicio'] ?? [];
         $descuentos = $_POST['descuento'] ?? [];
@@ -250,6 +260,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         }
         if (!in_array($validezDias, [1, 5, 10], true)) {
             $errors[] = 'Selecciona una validez de cotización válida.';
+        }
+        if ($correoCco !== '' && empty(normalize_email_list($correoCco))) {
+            $errors[] = 'Ingresa correos CCO válidos separados por coma.';
         }
 
         $lineas = [];
@@ -314,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $fechaValidez = date('Y-m-d', strtotime($fechaRegistro . ' +' . $validezDias . ' days'));
                 $codigoCotizacion = 'COT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
                 db()->beginTransaction();
-                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, subtotal, descuento_porcentaje, descuento_monto, total, validez_dias, fecha_validez) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE codigo_cotizacion = VALUES(codigo_cotizacion), fecha_registro = VALUES(fecha_registro), tiempo_servicio = VALUES(tiempo_servicio), fecha_vencimiento = VALUES(fecha_vencimiento), enviar_correo = VALUES(enviar_correo), nota_cotizacion = VALUES(nota_cotizacion), subtotal = VALUES(subtotal), descuento_porcentaje = VALUES(descuento_porcentaje), descuento_monto = VALUES(descuento_monto), total = VALUES(total), validez_dias = VALUES(validez_dias), fecha_validez = VALUES(fecha_validez)');
+                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, correo_cco, subtotal, descuento_porcentaje, descuento_monto, total, validez_dias, fecha_validez) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE codigo_cotizacion = VALUES(codigo_cotizacion), fecha_registro = VALUES(fecha_registro), tiempo_servicio = VALUES(tiempo_servicio), fecha_vencimiento = VALUES(fecha_vencimiento), enviar_correo = VALUES(enviar_correo), nota_cotizacion = VALUES(nota_cotizacion), correo_cco = VALUES(correo_cco), subtotal = VALUES(subtotal), descuento_porcentaje = VALUES(descuento_porcentaje), descuento_monto = VALUES(descuento_monto), total = VALUES(total), validez_dias = VALUES(validez_dias), fecha_validez = VALUES(fecha_validez)');
                 foreach ($lineas as $linea) {
                     $stmtInsert->execute([
                         $clienteId,
@@ -325,6 +338,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                         $linea['fecha_vencimiento'],
                         $enviarCorreo,
                         $notaCotizacion !== '' ? $notaCotizacion : null,
+                        $correoCco !== '' ? $correoCco : null,
                         $linea['subtotal'],
                         $linea['descuento_porcentaje'],
                         $linea['descuento_monto'],
@@ -340,7 +354,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                         $stmtClienteCorreo = db()->prepare('SELECT nombre, correo, telefono, direccion FROM clientes WHERE id = ? LIMIT 1');
                         $stmtClienteCorreo->execute([$clienteId]);
                         $clienteCorreo = $stmtClienteCorreo->fetch() ?: [];
-                        enviar_correo_cotizacion($clienteCorreo, $lineas, $codigoCotizacion, $notaCotizacion, $validezDias, $fechaValidez);
+                        enviar_correo_cotizacion($clienteCorreo, $lineas, $codigoCotizacion, $notaCotizacion, $validezDias, $fechaValidez, $correoCco);
                     } catch (Exception $e) {
                     } catch (Error $e) {
                     }
@@ -468,7 +482,8 @@ try {
                                cs.validez_dias,
                                cs.fecha_validez,
                                cs.enviar_correo,
-                               cs.nota_cotizacion
+                               cs.nota_cotizacion,
+                               cs.correo_cco
                         FROM clientes_servicios cs
                         JOIN clientes c ON c.id = cs.cliente_id
                         JOIN servicios s ON s.id = cs.servicio_id';
@@ -552,6 +567,11 @@ try {
                                 <label class="form-check-label" for="enviar-correo">Enviar correo al cliente con servicios asociados</label>
                             </div>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="correo-cco">Correo CCO</label>
+                            <input type="text" id="correo-cco" name="correo_cco" class="form-control" placeholder="copia1@dominio.cl, copia2@dominio.cl" value="<?php echo htmlspecialchars($_POST['correo_cco'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                            <div class="form-text">Opcional. Se enviará copia oculta al enviar la cotización.</div>
+                        </div>
                         <div class="col-12">
                             <div class="border rounded p-3 bg-light">
                                 <h6 class="mb-2">Datos del cliente</h6>
@@ -633,6 +653,7 @@ try {
                                 <td>
                                     <div>$<?php echo htmlspecialchars(number_format((float) ($item['total'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></div>
                                     <?php if ((int) ($item['enviar_correo'] ?? 0) === 1) : ?><small class="text-success">Correo marcado</small><?php endif; ?>
+                                    <?php if (!empty($item['correo_cco'])) : ?><br><small class="text-muted">CCO: <?php echo htmlspecialchars((string) $item['correo_cco'], ENT_QUOTES, 'UTF-8'); ?></small><?php endif; ?>
                                 </td>
                                 <td><?php echo (int) ($item['validez_dias'] ?? 0); ?> días<br><small class="text-muted"><?php echo !empty($item['fecha_validez']) ? htmlspecialchars(date('d/m/Y', strtotime((string) $item['fecha_validez'])), ENT_QUOTES, 'UTF-8') : '-'; ?></small></td>
                                 <td class="text-end">
@@ -641,6 +662,8 @@ try {
                                             Acciones
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item" href="clientes-servicios-asociar.php?id=<?php echo (int) $item['id']; ?>">Editar</a></li>
+                                            <li><hr class="dropdown-divider"></li>
                                             <li>
                                                 <form method="post" onsubmit="return confirm('¿Eliminar esta asociación?');">
                                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
@@ -776,6 +799,7 @@ try {
                     <option value="Trimestral">Trimestral</option>
                     <option value="Semestral">Semestral</option>
                     <option value="Anual">Anual</option>
+                    <option value="Un pago">Un pago</option>
                 </select>
             </td>
             <td class="js-precio">$0</td>

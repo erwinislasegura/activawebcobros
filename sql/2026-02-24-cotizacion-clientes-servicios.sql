@@ -54,9 +54,19 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+
+SET @sql := IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'clientes_servicios' AND COLUMN_NAME = 'correo_cco') = 0,
+    'ALTER TABLE clientes_servicios ADD COLUMN correo_cco VARCHAR(255) NULL AFTER nota_cotizacion',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @sql := IF(
     (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'clientes_servicios' AND COLUMN_NAME = 'subtotal') = 0,
-    'ALTER TABLE clientes_servicios ADD COLUMN subtotal DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER nota_cotizacion',
+    'ALTER TABLE clientes_servicios ADD COLUMN subtotal DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER correo_cco',
     'SELECT 1'
 );
 PREPARE stmt FROM @sql;
