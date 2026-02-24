@@ -21,8 +21,8 @@ try {
 } catch (Error $e) {
 }
 
-$defaultSubject = 'Cotización {{codigo_cotizacion}} - {{municipalidad_nombre}}';
-$defaultBody = '<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:16px;"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:18px 22px;background:#1D4ED8;color:#fff;"><strong>{{municipalidad_nombre}}</strong></td></tr><tr><td style="padding:18px 22px;color:#111827;"><p>Estimado/a <strong>{{cliente_nombre}}</strong>,</p><p>Te compartimos los servicios asociados en la cotización <strong>{{codigo_cotizacion}}</strong>.</p>{{detalle_servicios}}<p><strong>Total:</strong> {{total_cotizacion}}</p><p>{{nota_cotizacion}}</p></td></tr></table></body></html>';
+$defaultSubject = 'Cotización {{codigo_cotizacion}} · {{municipalidad_nombre}}';
+$defaultBody = '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="padding:22px 12px;"><tr><td align="center"><table width="680" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;"><tr><td style="padding:20px 24px;background:#1d4ed8;color:#ffffff;"><div style="font-size:20px;font-weight:700;">Cotización de servicios</div><div style="font-size:13px;opacity:.95;">{{bajada_informativa}}</div></td></tr><tr><td style="padding:18px 24px;color:#111827;font-size:14px;line-height:1.6;"><p style="margin:0 0 10px 0;">Hola <strong>{{cliente_nombre}}</strong>, te compartimos el detalle de tu cotización <strong>{{codigo_cotizacion}}</strong>.</p><table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin:12px 0;"><tr><td style="padding:12px 14px;"><div style="font-weight:700;margin-bottom:6px;">Datos cliente</div><div><strong>Contacto:</strong> {{cliente_contacto}}</div><div><strong>Correo:</strong> {{cliente_correo}}</div><div><strong>Dirección:</strong> {{cliente_direccion}}</div></td></tr></table><table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin:12px 0;"><tr><td style="padding:12px 14px;"><div style="font-weight:700;margin-bottom:6px;">Detalle de la cotización</div>{{detalle_servicios}}<div style="margin-top:8px;"><strong>Total:</strong> {{total_cotizacion}}</div><div><strong>Válida por:</strong> {{validez_dias}} días (hasta {{fecha_validez}})</div></td></tr></table><table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin:12px 0;"><tr><td style="padding:12px 14px;"><div style="font-weight:700;margin-bottom:6px;">Condiciones</div><div>{{nota_cotizacion}}</div></td></tr></table><p style="margin:12px 0 0 0;color:#4b5563;">Si tienes dudas, responde este correo y te ayudamos.</p></td></tr></table></td></tr></table></body></html>';
 
 $stmt = db()->prepare('SELECT subject, body_html FROM email_templates WHERE template_key = ? LIMIT 1');
 $stmt->execute([$templateKey]);
@@ -61,8 +61,14 @@ $previewData = [
     '{{cliente_nombre}}' => 'Comercial Demo SpA',
     '{{codigo_cotizacion}}' => 'COT-AB12CD34',
     '{{detalle_servicios}}' => '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse;margin:12px 0;"><thead><tr><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Servicio</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Periodicidad</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Desc. %</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Total</th></tr></thead><tbody><tr><td style="padding:6px;border-bottom:1px solid #e5e7eb;">Hosting</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">Mensual</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">10,00%</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">$45.000,00</td></tr></tbody></table>',
-    '{{nota_cotizacion}}' => 'Valores vigentes por 15 días.',
+    '{{bajada_informativa}}' => 'Propuesta comercial informativa con condiciones y vigencia.',
+    '{{nota_cotizacion}}' => 'Valores vigentes por 5 días. Incluye soporte básico y está sujeta a confirmación comercial.',
     '{{total_cotizacion}}' => '$45.000,00',
+    '{{validez_dias}}' => '5',
+    '{{fecha_validez}}' => date('d/m/Y', strtotime('+5 days')),
+    '{{cliente_contacto}}' => '+56 9 1234 5678',
+    '{{cliente_correo}}' => 'contacto@comercialdemo.cl',
+    '{{cliente_direccion}}' => 'Av. Principal 123, Santiago',
 ];
 $subjectPreview = strtr($template['subject'], $previewData);
 $bodyPreview = strtr($template['body_html'], $previewData);
