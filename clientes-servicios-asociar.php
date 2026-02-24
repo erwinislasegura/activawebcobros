@@ -5,6 +5,8 @@ $errors = [];
 $errorMessage = '';
 $success = $_GET['success'] ?? '';
 $asociacionEdit = null;
+$cotizacionEdit = null;
+$cotizacionLineasEdit = [];
 $filtroTexto = trim((string) ($_GET['q'] ?? ''));
 
 
@@ -239,6 +241,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
     }
 
     if ($action === 'create_quote') {
+        $quoteEditId = (int) ($_POST['quote_edit_id'] ?? 0);
+        $quoteEditCode = trim((string) ($_POST['quote_edit_code'] ?? ''));
         $clienteId = (int) ($_POST['cliente_id'] ?? 0);
         $fechaRegistro = trim((string) ($_POST['fecha_registro'] ?? ''));
         $enviarCorreo = isset($_POST['enviar_correo']) ? 1 : 0;
@@ -325,8 +329,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         if (empty($errors) && !empty($lineas)) {
             try {
                 $fechaValidez = date('Y-m-d', strtotime($fechaRegistro . ' +' . $validezDias . ' days'));
-                $codigoCotizacion = 'COT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+                $codigoCotizacion = $quoteEditCode !== '' ? $quoteEditCode : 'COT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
                 db()->beginTransaction();
+
+                if ($quoteEditCode !== '') {
+                    $stmtDeleteQuote = db()->prepare('DELETE FROM clientes_servicios WHERE cliente_id = ? AND codigo_cotizacion = ?');
+                    $stmtDeleteQuote->execute([$clienteId, $quoteEditCode]);
+                } elseif ($quoteEditId > 0) {
+                    $stmtDeleteLine = db()->prepare('DELETE FROM clientes_servicios WHERE id = ? LIMIT 1');
+                    $stmtDeleteLine->execute([$quoteEditId]);
+                }
+
                 $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, correo_cco, subtotal, descuento_porcentaje, descuento_monto, total, validez_dias, fecha_validez) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE codigo_cotizacion = VALUES(codigo_cotizacion), fecha_registro = VALUES(fecha_registro), tiempo_servicio = VALUES(tiempo_servicio), fecha_vencimiento = VALUES(fecha_vencimiento), enviar_correo = VALUES(enviar_correo), nota_cotizacion = VALUES(nota_cotizacion), correo_cco = VALUES(correo_cco), subtotal = VALUES(subtotal), descuento_porcentaje = VALUES(descuento_porcentaje), descuento_monto = VALUES(descuento_monto), total = VALUES(total), validez_dias = VALUES(validez_dias), fecha_validez = VALUES(fecha_validez)');
                 foreach ($lineas as $linea) {
                     $stmtInsert->execute([
@@ -436,11 +449,35 @@ if (isset($_GET['id'])) {
     $editId = (int) $_GET['id'];
     if ($editId > 0) {
         try {
-            $stmt = db()->prepare('SELECT id, cliente_id, servicio_id, fecha_registro, tiempo_servicio FROM clientes_servicios WHERE id = ? LIMIT 1');
+            $stmt = db()->prepare('SELECT id, cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, enviar_correo, nota_cotizacion, correo_cco, validez_dias FROM clientes_servicios WHERE id = ? LIMIT 1');
             $stmt->execute([$editId]);
             $asociacionEdit = $stmt->fetch() ?: null;
             if (!$asociacionEdit) {
                 $errorMessage = 'No se encontró la asociación a editar.';
+            } else {
+                $codigoEdit = trim((string) ($asociacionEdit['codigo_cotizacion'] ?? ''));
+                if ($codigoEdit !== '') {
+                    $stmtQuote = db()->prepare('SELECT id, cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, enviar_correo, nota_cotizacion, correo_cco, validez_dias, subtotal, descuento_porcentaje FROM clientes_servicios WHERE cliente_id = ? AND codigo_cotizacion = ? ORDER BY id ASC');
+                    $stmtQuote->execute([(int) $asociacionEdit['cliente_id'], $codigoEdit]);
+                    $rows = $stmtQuote->fetchAll();
+                    if (!empty($rows)) {
+                        $cotizacionEdit = $rows[0];
+                        foreach ($rows as $row) {
+                            $cotizacionLineasEdit[] = [
+                                'servicio_id' => (int) ($row['servicio_id'] ?? 0),
+                                'tiempo_servicio' => (string) ($row['tiempo_servicio'] ?? 'Mensual'),
+                                'descuento' => (int) round((float) ($row['descuento_porcentaje'] ?? 0)),
+                            ];
+                        }
+                    }
+                } else {
+                    $cotizacionEdit = $asociacionEdit;
+                    $cotizacionLineasEdit[] = [
+                        'servicio_id' => (int) ($asociacionEdit['servicio_id'] ?? 0),
+                        'tiempo_servicio' => (string) ($asociacionEdit['tiempo_servicio'] ?? 'Mensual'),
+                        'descuento' => 0,
+                    ];
+                }
             }
         } catch (Exception $e) {
             $errorMessage = 'No se pudo cargar la asociación para edición.';
@@ -505,6 +542,24 @@ try {
 } catch (Error $e) {
     $errorMessage = $errorMessage !== '' ? $errorMessage : 'No se pudieron cargar los datos.';
 }
+
+$lineasIniciales = [];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $servPost = $_POST['servicio_id'] ?? [];
+    $timePost = $_POST['tiempo_servicio'] ?? [];
+    $descPost = $_POST['descuento'] ?? [];
+    if (is_array($servPost)) {
+        foreach ($servPost as $idx => $servicioRaw) {
+            $lineasIniciales[] = [
+                'servicio_id' => (int) $servicioRaw,
+                'tiempo_servicio' => (string) ($timePost[$idx] ?? 'Mensual'),
+                'descuento' => (int) round((float) ($descPost[$idx] ?? 0)),
+            ];
+        }
+    }
+} elseif (!empty($cotizacionLineasEdit)) {
+    $lineasIniciales = $cotizacionLineasEdit;
+}
 ?>
 <?php include('partials/html.php'); ?>
 <head>
@@ -539,23 +594,25 @@ try {
                     <form method="post" class="row g-3">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="action" value="create_quote">
+                        <input type="hidden" name="quote_edit_id" value="<?php echo (int) ($cotizacionEdit['id'] ?? 0); ?>">
+                        <input type="hidden" name="quote_edit_code" value="<?php echo htmlspecialchars((string) ($cotizacionEdit['codigo_cotizacion'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                         <div class="col-md-6">
                             <label class="form-label">Cliente</label>
                             <select id="cliente-id" name="cliente_id" class="form-select" required>
                                 <option value="">Selecciona un cliente</option>
                                 <?php foreach ($clientes as $cliente) : ?>
-                                    <option value="<?php echo (int) $cliente['id']; ?>" <?php echo ((int) ($_POST['cliente_id'] ?? ($asociacionEdit['cliente_id'] ?? 0)) === (int) $cliente['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars(($cliente['codigo'] ?? '') . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <option value="<?php echo (int) $cliente['id']; ?>" <?php echo ((int) ($_POST['cliente_id'] ?? ($cotizacionEdit['cliente_id'] ?? ($asociacionEdit['cliente_id'] ?? 0))) === (int) $cliente['id']) ? 'selected' : ''; ?>><?php echo htmlspecialchars(($cliente['codigo'] ?? '') . ' - ' . $cliente['nombre'], ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="fecha-registro">Fecha de cotización</label>
-                            <input type="date" id="fecha-registro" name="fecha_registro" class="form-control" value="<?php echo htmlspecialchars($_POST['fecha_registro'] ?? date('Y-m-d'), ENT_QUOTES, 'UTF-8'); ?>" required>
+                            <input type="date" id="fecha-registro" name="fecha_registro" class="form-control" value="<?php echo htmlspecialchars($_POST['fecha_registro'] ?? ($cotizacionEdit['fecha_registro'] ?? date('Y-m-d')), ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label" for="validez-dias">Validez cotización</label>
                             <select id="validez-dias" name="validez_dias" class="form-select">
-                                <?php $validezActual = (int) ($_POST['validez_dias'] ?? 5); ?>
+                                <?php $validezActual = (int) ($_POST['validez_dias'] ?? ($cotizacionEdit['validez_dias'] ?? 5)); ?>
                                 <option value="1" <?php echo $validezActual === 1 ? 'selected' : ''; ?>>24 horas</option>
                                 <option value="5" <?php echo $validezActual === 5 ? 'selected' : ''; ?>>5 días</option>
                                 <option value="10" <?php echo $validezActual === 10 ? 'selected' : ''; ?>>10 días</option>
@@ -563,13 +620,13 @@ try {
                         </div>
                         <div class="col-md-3 d-flex align-items-end">
                             <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" id="enviar-correo" name="enviar_correo" value="1" <?php echo isset($_POST['enviar_correo']) ? 'checked' : ''; ?>>
+                                <input class="form-check-input" type="checkbox" id="enviar-correo" name="enviar_correo" value="1" <?php echo isset($_POST['enviar_correo']) || (!isset($_POST['enviar_correo']) && (int) ($cotizacionEdit['enviar_correo'] ?? 0) === 1) ? 'checked' : ''; ?>>
                                 <label class="form-check-label" for="enviar-correo">Enviar correo al cliente con servicios asociados</label>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="correo-cco">Correo CCO</label>
-                            <input type="text" id="correo-cco" name="correo_cco" class="form-control" placeholder="copia1@dominio.cl, copia2@dominio.cl" value="<?php echo htmlspecialchars($_POST['correo_cco'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                            <input type="text" id="correo-cco" name="correo_cco" class="form-control" placeholder="copia1@dominio.cl, copia2@dominio.cl" value="<?php echo htmlspecialchars($_POST['correo_cco'] ?? ($cotizacionEdit['correo_cco'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                             <div class="form-text">Opcional. Se enviará copia oculta al enviar la cotización.</div>
                         </div>
                         <div class="col-12">
@@ -602,7 +659,7 @@ try {
                         </div>
                         <div class="col-12">
                             <label class="form-label" for="nota-cotizacion">Nota</label>
-                            <textarea id="nota-cotizacion" name="nota_cotizacion" class="form-control" rows="3" placeholder="Condiciones, observaciones o términos de la cotización..."><?php echo htmlspecialchars($_POST['nota_cotizacion'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            <textarea id="nota-cotizacion" name="nota_cotizacion" class="form-control" rows="3" placeholder="Condiciones, observaciones o términos de la cotización..."><?php echo htmlspecialchars($_POST['nota_cotizacion'] ?? ($cotizacionEdit['nota_cotizacion'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
                         </div>
                         <div class="col-12">
                             <div class="alert alert-info mb-0">
@@ -610,7 +667,7 @@ try {
                             </div>
                         </div>
                         <div class="col-12">
-                            <button type="submit" class="btn btn-primary">Guardar cotización</button>
+                            <button type="submit" class="btn btn-primary"><?php echo $cotizacionEdit ? 'Actualizar cotización' : 'Guardar cotización'; ?></button>
                         </div>
                     </form>
                 </div>
@@ -720,6 +777,8 @@ try {
         direccion: document.getElementById('cliente-detalle-direccion'),
     };
 
+    const lineasIniciales = <?php echo json_encode($lineasIniciales, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+
     if (!body || !btnAgregar || !totalCotizacion) {
         return;
     }
@@ -784,7 +843,7 @@ try {
         totalCotizacion.textContent = formatoMoneda(total);
     }
 
-    function agregarLinea() {
+    function agregarLinea(lineaInicial = null) {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>
@@ -809,8 +868,19 @@ try {
         `;
 
         const selectServicio = row.querySelector('.js-servicio');
+        const selectTiempo = row.querySelector('select[name="tiempo_servicio[]"]');
         const inputDescuento = row.querySelector('.js-descuento');
         const btnEliminar = row.querySelector('.js-eliminar');
+
+        if (lineaInicial && Number(lineaInicial.servicio_id || 0) > 0) {
+            selectServicio.value = String(Number(lineaInicial.servicio_id));
+        }
+        if (lineaInicial && typeof lineaInicial.tiempo_servicio === 'string' && lineaInicial.tiempo_servicio !== '') {
+            selectTiempo.value = lineaInicial.tiempo_servicio;
+        }
+        if (lineaInicial && Number.isFinite(Number(lineaInicial.descuento))) {
+            inputDescuento.value = String(Math.max(0, Math.min(100, Math.round(Number(lineaInicial.descuento)))));
+        }
 
         const sync = () => {
             recalcularFila(row);
@@ -833,7 +903,11 @@ try {
         clienteSelect.addEventListener('change', syncClienteDetalle);
         syncClienteDetalle();
     }
-    agregarLinea();
+    if (Array.isArray(lineasIniciales) && lineasIniciales.length > 0) {
+        lineasIniciales.forEach((linea) => agregarLinea(linea));
+    } else {
+        agregarLinea();
+    }
 })();
 </script>
 </body>
