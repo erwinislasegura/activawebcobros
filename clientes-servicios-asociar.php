@@ -120,7 +120,7 @@ function enviar_correo_cotizacion(array $cliente, array $lineas, string $codigoC
     $total = 0.0;
     foreach ($lineas as $linea) {
         $total += (float) ($linea['total'] ?? 0);
-        $rows .= '<tr><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars((string) ($linea['servicio_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars((string) ($linea['tiempo_servicio'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . number_format((float) ($linea['descuento_porcentaje'] ?? 0), 2, ',', '.') . '%</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">$' . number_format((float) ($linea['total'] ?? 0), 2, ',', '.') . '</td></tr>';
+        $rows .= '<tr><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars((string) ($linea['servicio_nombre'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . htmlspecialchars((string) ($linea['tiempo_servicio'] ?? ''), ENT_QUOTES, 'UTF-8') . '</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">' . number_format((float) ($linea['descuento_porcentaje'] ?? 0), 0, ',', '.') . '%</td><td style="padding:6px;border-bottom:1px solid #e5e7eb;">$' . number_format((float) ($linea['total'] ?? 0), 2, ',', '.') . '</td></tr>';
     }
 
     $detalleServicios = '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;border-collapse:collapse;margin:12px 0;"><thead><tr><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Servicio</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Periodicidad</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Desc. %</th><th align="left" style="padding:6px;border-bottom:1px solid #d1d5db;">Total</th></tr></thead><tbody>' . $rows . '</tbody></table>';
@@ -190,7 +190,7 @@ try {
     ensure_column('clientes_servicios', 'enviar_correo', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER fecha_vencimiento');
     ensure_column('clientes_servicios', 'nota_cotizacion', 'TEXT NULL AFTER enviar_correo');
     ensure_column('clientes_servicios', 'subtotal', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER nota_cotizacion');
-    ensure_column('clientes_servicios', 'descuento_porcentaje', 'DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER subtotal');
+    ensure_column('clientes_servicios', 'descuento_porcentaje', 'TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER subtotal');
     ensure_column('clientes_servicios', 'descuento_monto', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_porcentaje');
     ensure_column('clientes_servicios', 'total', 'DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER descuento_monto');
     ensure_column('clientes_servicios', 'validez_dias', 'INT NOT NULL DEFAULT 5 AFTER total');
@@ -261,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 foreach ($serviciosIds as $idx => $servicioRaw) {
                     $servicioId = (int) $servicioRaw;
                     $periodicidad = trim((string) ($periodicidades[$idx] ?? 'Mensual'));
-                    $descuentoPorcentaje = (float) ($descuentos[$idx] ?? 0);
+                    $descuentoPorcentaje = (int) round((float) ($descuentos[$idx] ?? 0));
 
                     if ($servicioId <= 0) {
                         $errors[] = 'Hay un servicio inválido en la cotización.';
@@ -314,7 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $fechaValidez = date('Y-m-d', strtotime($fechaRegistro . ' +' . $validezDias . ' days'));
                 $codigoCotizacion = 'COT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
                 db()->beginTransaction();
-                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, subtotal, descuento_porcentaje, descuento_monto, total, validez_dias, fecha_validez) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmtInsert = db()->prepare('INSERT INTO clientes_servicios (cliente_id, servicio_id, codigo_cotizacion, fecha_registro, tiempo_servicio, fecha_vencimiento, enviar_correo, nota_cotizacion, subtotal, descuento_porcentaje, descuento_monto, total, validez_dias, fecha_validez) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE codigo_cotizacion = VALUES(codigo_cotizacion), fecha_registro = VALUES(fecha_registro), tiempo_servicio = VALUES(tiempo_servicio), fecha_vencimiento = VALUES(fecha_vencimiento), enviar_correo = VALUES(enviar_correo), nota_cotizacion = VALUES(nota_cotizacion), subtotal = VALUES(subtotal), descuento_porcentaje = VALUES(descuento_porcentaje), descuento_monto = VALUES(descuento_monto), total = VALUES(total), validez_dias = VALUES(validez_dias), fecha_validez = VALUES(fecha_validez)');
                 foreach ($lineas as $linea) {
                     $stmtInsert->execute([
                         $clienteId,
@@ -628,7 +628,7 @@ try {
                                 <td><?php echo htmlspecialchars($item['servicio'], ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td><?php echo htmlspecialchars($item['tiempo_servicio'] ?: '-', ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>$<?php echo htmlspecialchars(number_format((float) ($item['subtotal'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></td>
-                                <td><?php echo htmlspecialchars(number_format((float) ($item['descuento_porcentaje'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>%</td>
+                                <td><?php echo htmlspecialchars(number_format((float) ($item['descuento_porcentaje'] ?? 0), 0, ',', '.'), ENT_QUOTES, 'UTF-8'); ?>%</td>
                                 <td>$<?php echo htmlspecialchars(number_format((float) ($item['descuento_monto'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></td>
                                 <td>
                                     <div>$<?php echo htmlspecialchars(number_format((float) ($item['total'] ?? 0), 2, ',', '.'), ENT_QUOTES, 'UTF-8'); ?></div>
@@ -738,7 +738,8 @@ try {
 
         if (descuento < 0) descuento = 0;
         if (descuento > 100) descuento = 100;
-        inputDescuento.value = descuento.toFixed(2);
+        descuento = Math.round(descuento);
+        inputDescuento.value = descuento;
 
         const descuentoMonto = (monto * descuento) / 100;
         const total = monto - descuentoMonto;
@@ -778,7 +779,7 @@ try {
                 </select>
             </td>
             <td class="js-precio">$0</td>
-            <td><div class="input-group input-group-sm"><input type="number" name="descuento[]" class="form-control js-descuento" min="0" max="100" step="0.01" value="0"><span class="input-group-text">%</span></div></td>
+            <td><div class="input-group input-group-sm"><input type="number" name="descuento[]" class="form-control js-descuento" min="0" max="100" step="1" value="0"><span class="input-group-text">%</span></div></td>
             <td class="js-total-linea">$0</td>
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger js-eliminar">Quitar</button></td>
         `;
