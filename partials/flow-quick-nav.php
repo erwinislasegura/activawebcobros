@@ -13,10 +13,6 @@ $flowSteps = [
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <div>
-                <h6 class="mb-0">Flujo guiado de gestión y cobros</h6>
-                <small class="text-muted">Navega por los módulos activos sin perder el contexto operativo.</small>
-            </div>
             <div class="d-flex flex-wrap gap-2">
                 <?php foreach ($flowSteps as $step) : ?>
                     <?php $isCurrent = $step['key'] === $flowCurrentStep; ?>
