@@ -112,6 +112,7 @@
                         <li class="side-nav-item"><a href="cobros-servicios-registros.php" class="side-nav-link">Cobros</a></li>
                         <li class="side-nav-item"><a href="cobros-pagos.php" class="side-nav-link">Pagos</a></li>
                         <li class="side-nav-item"><a href="cobros-avisos.php" class="side-nav-link">Avisos</a></li>
+                        <li class="side-nav-item"><a href="cobros-eliminaciones.php" class="side-nav-link">Eliminaciones</a></li>
                         <li class="side-nav-item"><a href="cobros-totales.php" class="side-nav-link">Totales</a></li>
                     </ul>
                 </div>
@@ -187,6 +188,7 @@
                             <li class="side-nav-item"><a href="configuracion-avisos.php" class="side-nav-link">Plantillas avisos</a></li>
                             <li class="side-nav-item"><a href="configuracion-cotizacion-correo.php" class="side-nav-link">Plantilla cotización</a></li>
                             <li class="side-nav-item"><a href="configuracion-suspension-correo.php" class="side-nav-link">Plantilla suspensión</a></li>
+                            <li class="side-nav-item"><a href="configuracion-eliminacion-servicio-correo.php" class="side-nav-link">Plantilla eliminación servicio</a></li>
                         </ul>
                     </div>
                 </li>
