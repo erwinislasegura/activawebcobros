@@ -393,6 +393,11 @@ try {
                       JOIN cobros_servicios cb ON cb.cliente_id = cs.cliente_id AND cb.servicio_id = cs.servicio_id
                       LEFT JOIN clientes_servicios_suspensiones ss ON ss.cliente_servicio_id = cs.id AND (ss.cobro_id = cb.id OR ss.cobro_id IS NULL)
                       WHERE LOWER(TRIM(cb.estado)) <> "pagado"
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM pagos_clientes pc
+                            WHERE pc.cobro_id = cb.id
+                        )
                         AND ss.id IS NULL';
 
     if ($clienteFiltroId > 0) {

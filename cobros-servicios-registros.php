@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         try {
             $stmt = db()->prepare('DELETE FROM cobros_servicios WHERE id = ?');
             $stmt->execute([$deleteId]);
-            redirect('cobros-servicios-registros.php');
+            redirect('cobros-servicios-registros.php?deleted=1');
         } catch (Exception $e) {
             $errorMessage = 'No se pudo eliminar el cobro.';
         } catch (Error $e) {
@@ -477,6 +477,10 @@ foreach ($cobros as $cobro) {
 
                 <?php if ($success === '1') : ?>
                     <div class="alert alert-success">Cobro registrado correctamente.</div>
+                <?php endif; ?>
+
+                <?php if (($_GET['deleted'] ?? '') === '1') : ?>
+                    <div class="alert alert-success">Cobro eliminado correctamente.</div>
                 <?php endif; ?>
 
                 <?php if ($errorMessage !== '') : ?>
@@ -768,22 +772,14 @@ foreach ($cobros as $cobro) {
                                                             </span>
                                                         </td>
                                                         <td class="text-end">
-                                                            <div class="dropdown">
-                                                                <button class="btn btn-sm btn-soft-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                                    Acciones
-                                                                </button>
-                                                                <ul class="dropdown-menu dropdown-menu-end">
-                                                                    <li><a class="dropdown-item" href="cobros-servicios-registros.php?id=<?php echo (int) $cobro['id']; ?>">Ver/Editar</a></li>
-                                                                    <li><hr class="dropdown-divider"></li>
-                                                                    <li>
-                                                                        <form method="post" class="px-3 py-1" data-confirm="¿Estás seguro de eliminar este cobro?">
-                                                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
-                                                                            <input type="hidden" name="action" value="delete">
-                                                                            <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
-                                                                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Eliminar</button>
-                                                                        </form>
-                                                                    </li>
-                                                                </ul>
+                                                            <div class="d-inline-flex gap-1">
+                                                                <a class="btn btn-sm btn-soft-primary" href="cobros-servicios-registros.php?id=<?php echo (int) $cobro['id']; ?>">Ver/Editar</a>
+                                                                <form method="post" class="d-inline" data-confirm="¿Estás seguro de eliminar este cobro?">
+                                                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8'); ?>">
+                                                                    <input type="hidden" name="action" value="delete">
+                                                                    <input type="hidden" name="id" value="<?php echo (int) $cobro['id']; ?>">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
+                                                                </form>
                                                             </div>
                                                         </td>
                                                     </tr>
