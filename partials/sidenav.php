@@ -82,7 +82,6 @@
                     <ul class="side-nav sub-menu">
                         <li class="side-nav-item"><a href="clientes-crear.php" class="side-nav-link">Alta cliente</a></li>
                         <li class="side-nav-item"><a href="clientes-servicios-asociar.php" class="side-nav-link">Cotización</a></li>
-                        <li class="side-nav-item"><a href="clientes-servicios.php" class="side-nav-link">Suspensiones</a></li>
                     </ul>
                 </div>
             </li>
@@ -110,9 +109,10 @@
                 <div class="collapse" id="modulo-cobros-servicios">
                     <ul class="side-nav sub-menu">
                         <li class="side-nav-item"><a href="cobros-servicios-registros.php" class="side-nav-link">Cobros</a></li>
-                        <li class="side-nav-item"><a href="cobros-pagos.php" class="side-nav-link">Pagos</a></li>
                         <li class="side-nav-item"><a href="cobros-avisos.php" class="side-nav-link">Avisos</a></li>
+                        <li class="side-nav-item"><a href="clientes-servicios.php" class="side-nav-link">Suspensiones</a></li>
                         <li class="side-nav-item"><a href="cobros-eliminaciones.php" class="side-nav-link">Eliminaciones</a></li>
+                        <li class="side-nav-item"><a href="cobros-pagos.php" class="side-nav-link">Pagos</a></li>
                         <li class="side-nav-item"><a href="cobros-totales.php" class="side-nav-link">Totales</a></li>
                     </ul>
                 </div>
@@ -186,9 +186,9 @@
                             <li class="side-nav-item"><a href="notificaciones-correo.php" class="side-nav-link">Correo avisos</a></li>
                             <li class="side-nav-item"><a href="notificaciones-whatsapp.php" class="side-nav-link">WhatsApp</a></li>
                             <li class="side-nav-item"><a href="configuracion-avisos.php" class="side-nav-link">Plantillas avisos</a></li>
-                            <li class="side-nav-item"><a href="configuracion-cotizacion-correo.php" class="side-nav-link">Plantilla cotización</a></li>
                             <li class="side-nav-item"><a href="configuracion-suspension-correo.php" class="side-nav-link">Plantilla suspensión</a></li>
                             <li class="side-nav-item"><a href="configuracion-eliminacion-servicio-correo.php" class="side-nav-link">Plantilla eliminación servicio</a></li>
+                            <li class="side-nav-item"><a href="configuracion-cotizacion-correo.php" class="side-nav-link">Plantilla cotización</a></li>
                         </ul>
                     </div>
                 </li>
