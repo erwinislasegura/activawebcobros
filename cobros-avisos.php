@@ -233,6 +233,12 @@ try {
                  LEFT JOIN clientes c ON c.id = cs.cliente_id
                  JOIN servicios s ON s.id = cs.servicio_id
                  WHERE cs.id = ?
+                   AND LOWER(TRIM(cs.estado)) <> "pagado"
+                   AND NOT EXISTS (
+                       SELECT 1
+                       FROM pagos_clientes pc
+                       WHERE pc.cobro_id = cs.id
+                   )
                  LIMIT 1'
             );
             $stmtCobro->execute([$cobroId]);
@@ -241,7 +247,7 @@ try {
             $recipientEmails = $cobro ? parse_recipient_emails((string) ($cobro['cliente_correo'] ?? '')) : [];
 
             if (!$cobro) {
-                $errorMessage = 'El cobro seleccionado no existe.';
+                $errorMessage = 'El cobro seleccionado no existe o ya tiene un pago registrado.';
             } elseif (empty($recipientEmails)) {
                 $errorMessage = 'El cliente no tiene correos válidos configurados.';
             } else {
@@ -348,7 +354,12 @@ try {
          FROM cobros_servicios cs
          LEFT JOIN clientes c ON c.id = cs.cliente_id
          JOIN servicios s ON s.id = cs.servicio_id
-         WHERE LOWER(TRIM(cs.estado)) <> "pagado"' . $excludeSuspendedCondition . '
+         WHERE LOWER(TRIM(cs.estado)) <> "pagado"
+           AND NOT EXISTS (
+               SELECT 1
+               FROM pagos_clientes pc
+               WHERE pc.cobro_id = cs.id
+           )' . $excludeSuspendedCondition . '
          ORDER BY cs.id DESC'
     )->fetchAll();
 } catch (Exception $e) {
