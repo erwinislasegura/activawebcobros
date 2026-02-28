@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/app/bootstrap.php';
 require __DIR__ . '/app/aviso-templates.php';
+require __DIR__ . '/app/mailer.php';
 
 $errorMessage = '';
 $successMessage = '';
@@ -70,32 +71,6 @@ $defaultTemplates = array_map(
 function render_template(string $template, array $data): string
 {
     return strtr($template, $data);
-}
-
-function parse_recipient_emails(?string $raw): array
-{
-    $raw = trim((string) $raw);
-    if ($raw === '') {
-        return [];
-    }
-
-    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
-    $emails = [];
-    foreach ($parts as $email) {
-        $email = trim($email);
-        if ($email === '') {
-            continue;
-        }
-        $email = mb_strtolower($email, 'UTF-8');
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            continue;
-        }
-        if (!in_array($email, $emails, true)) {
-            $emails[] = $email;
-        }
-    }
-
-    return $emails;
 }
 
 function append_payment_button(string $bodyHtml, string $link): string
@@ -244,7 +219,7 @@ try {
             $stmtCobro->execute([$cobroId]);
             $cobro = $stmtCobro->fetch();
 
-            $recipientEmails = $cobro ? parse_recipient_emails((string) ($cobro['cliente_correo'] ?? '')) : [];
+            $recipientEmails = $cobro ? mailer_parse_recipients((string) ($cobro['cliente_correo'] ?? '')) : [];
 
             if (!$cobro) {
                 $errorMessage = 'El cobro seleccionado no existe o ya tiene un pago registrado.';
@@ -281,29 +256,7 @@ try {
                     $subject = render_template($template['subject'], $data);
                     $bodyHtml = render_template($template['body_html'], $data);
                     $bodyHtml = append_payment_button($bodyHtml, (string) ($cobro['link_boton_pago'] ?? ''));
-                    $subjectEncoded = '=?UTF-8?B?' . base64_encode($subject) . '?=';
-                    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
-                    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
-                    $headers = [
-                        'MIME-Version: 1.0',
-                        'Content-type: text/html; charset=UTF-8',
-                        'Content-Transfer-Encoding: 8bit',
-                        'Date: ' . date(DATE_RFC2822),
-                        'Message-ID: ' . $messageId,
-                        'From: ' . $displayName . ' <' . $fromEmail . '>',
-                        'Reply-To: ' . $fromEmail,
-                        'Return-Path: ' . $fromEmail,
-                        'X-Mailer: PHP/' . phpversion(),
-                        'X-Auto-Response-Suppress: OOF, AutoReply',
-                    ];
-
-                    $mailSent = true;
-                    foreach ($recipientEmails as $recipientEmail) {
-                        if (!@mail($recipientEmail, $subjectEncoded, $bodyHtml, implode("\r\n", $headers))) {
-                            $mailSent = false;
-                            break;
-                        }
-                    }
+                    $mailSent = mailer_send_html($recipientEmails, $subject, $bodyHtml, $fromEmail, $fromName);
 
                     if ($mailSent) {
                         if ($sentColumn !== null) {

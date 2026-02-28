@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/app/bootstrap.php';
+require __DIR__ . '/app/mailer.php';
 
 $errors = [];
 $errorMessage = '';
@@ -11,32 +12,6 @@ $templateKey = 'suspension_servicio_urgente';
 function render_html_template(string $template, array $data): string
 {
     return strtr($template, $data);
-}
-
-function parse_recipient_emails(?string $raw): array
-{
-    $raw = trim((string) $raw);
-    if ($raw === '') {
-        return [];
-    }
-
-    $parts = preg_split('/[;,\s]+/', $raw) ?: [];
-    $emails = [];
-    foreach ($parts as $email) {
-        $email = trim($email);
-        if ($email === '') {
-            continue;
-        }
-        $email = mb_strtolower($email, 'UTF-8');
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            continue;
-        }
-        if (!in_array($email, $emails, true)) {
-            $emails[] = $email;
-        }
-    }
-
-    return $emails;
 }
 
 function append_suspension_payment_button(string $bodyHtml, string $link): string
@@ -90,43 +65,7 @@ HTML;
 
 function enviar_correo_suspension(string $destinatario, string $asunto, string $cuerpoHtml, string $fromEmail, string $fromName): bool
 {
-    $destinatario = trim($destinatario);
-    $fromEmail = trim($fromEmail);
-    $fromName = trim($fromName);
-
-    if ($destinatario === '' || $fromEmail === '' || !filter_var($destinatario, FILTER_VALIDATE_EMAIL) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
-        return false;
-    }
-
-    $asunto = trim(str_replace(["\r", "\n"], ' ', $asunto));
-    $asuntoEncoded = '=?UTF-8?B?' . base64_encode($asunto !== '' ? $asunto : 'Aviso de suspensión de servicio') . '?=';
-
-    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
-
-    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
-
-    $headers = [
-        'MIME-Version: 1.0',
-        'Content-type: text/html; charset=UTF-8',
-        'Content-Transfer-Encoding: 8bit',
-        'Date: ' . date(DATE_RFC2822),
-        'Message-ID: ' . $messageId,
-        'From: ' . $displayName . ' <' . $fromEmail . '>',
-        'Reply-To: ' . $fromEmail,
-        'Return-Path: ' . $fromEmail,
-        'X-Mailer: PHP/' . phpversion(),
-        'X-Auto-Response-Suppress: OOF, AutoReply',
-    ];
-
-    $headersString = implode("\r\n", $headers);
-    $extraParams = '-f ' . escapeshellarg($fromEmail);
-
-    $enviado = @mail($destinatario, $asuntoEncoded, $cuerpoHtml, $headersString, $extraParams);
-    if (!$enviado) {
-        $enviado = @mail($destinatario, $asuntoEncoded, $cuerpoHtml, $headersString);
-    }
-
-    return $enviado;
+    return mailer_send_html([$destinatario], $asunto !== '' ? $asunto : 'Aviso de suspensión de servicio', $cuerpoHtml, $fromEmail, $fromName);
 }
 
 
@@ -294,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'suspe
             $recipientEmails = [];
 
             if ($detalleServicio) {
-                $recipientEmails = parse_recipient_emails((string) ($detalleServicio['cliente_correo'] ?? ''));
+                $recipientEmails = mailer_parse_recipients((string) ($detalleServicio['cliente_correo'] ?? ''));
             }
 
             if (!$detalleServicio) {
