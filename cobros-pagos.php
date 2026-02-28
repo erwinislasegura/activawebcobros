@@ -103,13 +103,6 @@ function build_payment_receipt_email(array $data): string
 HTML;
 }
 
-function send_payment_receipt_email(string $toEmail, string $subject, string $bodyHtml, string $fromEmail, string $fromName): bool
-{
-    $recipients = mailer_parse_recipients($toEmail);
-
-    return mailer_send_html($recipients, $subject !== '' ? $subject : 'Comprobante de pago', $bodyHtml, $fromEmail, $fromName);
-}
-
 
 try {
     db()->exec(
@@ -239,7 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $stmtUpdate->execute(['Pagado', $cobroId]);
 
                 $mailSent = false;
-                if (!empty($cobro['cliente_correo']) && filter_var((string) $cobro['cliente_correo'], FILTER_VALIDATE_EMAIL)) {
+                $recipientEmails = mailer_parse_recipients((string) ($cobro['cliente_correo'] ?? ''));
+                if (!empty($recipientEmails)) {
                     $municipalidad = get_municipalidad();
                     $logoPath = $municipalidad['logo_path'] ?? 'assets/images/logo.png';
                     $logoUrl = preg_match('/^https?:\/\//', (string) $logoPath) ? (string) $logoPath : base_url() . '/' . ltrim((string) $logoPath, '/');
@@ -276,8 +270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                             'comprobante' => 'PAY-' . str_pad((string) $pagoId, 6, '0', STR_PAD_LEFT),
                             'fecha_emision' => date('d/m/Y H:i'),
                         ]);
-                        $mailSent = send_payment_receipt_email(
-                            (string) $cobro['cliente_correo'],
+                        $mailSent = mailer_send_html(
+                            $recipientEmails,
                             $subject,
                             $bodyHtml,
                             (string) $fromEmail,
