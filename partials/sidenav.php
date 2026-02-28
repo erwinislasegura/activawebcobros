@@ -110,6 +110,7 @@
                 <div class="collapse" id="modulo-cobros-servicios">
                     <ul class="side-nav sub-menu">
                         <li class="side-nav-item"><a href="cobros-servicios-registros.php" class="side-nav-link">Cobros</a></li>
+                        <li class="side-nav-item"><a href="cobros-pagos.php" class="side-nav-link">Registrar pagos</a></li>
                         <li class="side-nav-item"><a href="cobros-avisos.php" class="side-nav-link">Avisos</a></li>
                         <li class="side-nav-item"><a href="clientes-servicios.php" class="side-nav-link">Suspensiones</a></li>
                         <li class="side-nav-item"><a href="cobros-eliminaciones.php" class="side-nav-link">Eliminaciones</a></li>
