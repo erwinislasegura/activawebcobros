@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/app/bootstrap.php';
+require __DIR__ . '/app/mailer.php';
 
 $errors = [];
 $errorMessage = '';
@@ -100,45 +101,6 @@ function build_payment_receipt_email(array $data): string
 </body>
 </html>
 HTML;
-}
-
-function send_payment_receipt_email(string $toEmail, string $subject, string $bodyHtml, string $fromEmail, string $fromName): bool
-{
-    $toEmail = trim($toEmail);
-    $fromEmail = trim($fromEmail);
-    $fromName = trim($fromName);
-
-    if ($toEmail === '' || $fromEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
-        return false;
-    }
-
-    $subject = trim(str_replace(["\r", "\n"], ' ', $subject));
-    $subjectEncoded = '=?UTF-8?B?' . base64_encode($subject !== '' ? $subject : 'Comprobante de pago') . '?=';
-    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
-    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
-
-    $headers = [
-        'MIME-Version: 1.0',
-        'Content-type: text/html; charset=UTF-8',
-        'Content-Transfer-Encoding: 8bit',
-        'Date: ' . date(DATE_RFC2822),
-        'Message-ID: ' . $messageId,
-        'From: ' . $displayName . ' <' . $fromEmail . '>',
-        'Reply-To: ' . $fromEmail,
-        'Return-Path: ' . $fromEmail,
-        'X-Mailer: PHP/' . phpversion(),
-        'X-Auto-Response-Suppress: OOF, AutoReply',
-    ];
-
-    $headersString = implode("\r\n", $headers);
-    $extraParams = '-f ' . escapeshellarg($fromEmail);
-
-    $sent = @mail($toEmail, $subjectEncoded, $bodyHtml, $headersString, $extraParams);
-    if (!$sent) {
-        $sent = @mail($toEmail, $subjectEncoded, $bodyHtml, $headersString);
-    }
-
-    return $sent;
 }
 
 
@@ -270,7 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                 $stmtUpdate->execute(['Pagado', $cobroId]);
 
                 $mailSent = false;
-                if (!empty($cobro['cliente_correo']) && filter_var((string) $cobro['cliente_correo'], FILTER_VALIDATE_EMAIL)) {
+                $recipientEmails = mailer_parse_recipients((string) ($cobro['cliente_correo'] ?? ''));
+                if (!empty($recipientEmails)) {
                     $municipalidad = get_municipalidad();
                     $logoPath = $municipalidad['logo_path'] ?? 'assets/images/logo.png';
                     $logoUrl = preg_match('/^https?:\/\//', (string) $logoPath) ? (string) $logoPath : base_url() . '/' . ltrim((string) $logoPath, '/');
@@ -307,8 +270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                             'comprobante' => 'PAY-' . str_pad((string) $pagoId, 6, '0', STR_PAD_LEFT),
                             'fecha_emision' => date('d/m/Y H:i'),
                         ]);
-                        $mailSent = send_payment_receipt_email(
-                            (string) $cobro['cliente_correo'],
+                        $mailSent = mailer_send_html(
+                            $recipientEmails,
                             $subject,
                             $bodyHtml,
                             (string) $fromEmail,
