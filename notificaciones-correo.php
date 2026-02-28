@@ -18,6 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
         $errors[] = 'Completa los campos obligatorios de correo IMAP.';
     }
 
+    if ($correoImap !== '' && !filter_var($correoImap, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'El correo IMAP no tiene un formato válido.';
+    }
+
+    if ($fromCorreo === '' && filter_var($correoImap, FILTER_VALIDATE_EMAIL)) {
+        $fromCorreo = $correoImap;
+    }
+
+    if ($fromCorreo !== '' && !filter_var($fromCorreo, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'El correo remitente no tiene un formato válido.';
+    }
+
     if (empty($errors)) {
         $stmt = db()->query('SELECT id FROM notificacion_correos LIMIT 1');
         $id = $stmt->fetchColumn();
@@ -91,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                                 <div>
                                     <h5 class="card-title mb-0">Correo IMAP de envío</h5>
-                                    <p class="text-muted mb-0">Configura la casilla que enviará los avisos desde el sistema.</p>
+                                    <p class="text-muted mb-0">Configura la casilla que enviará los avisos desde el sistema. Si no defines correo remitente, se usará el correo IMAP.</p>
                                 </div>
                                 <button type="submit" form="correo-notificaciones-form" class="btn btn-primary">Guardar configuración</button>
                             </div>

@@ -282,8 +282,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                         $correoConfig = [];
                     }
 
-                    $fromEmail = $correoConfig['from_correo'] ?? $correoConfig['correo_imap'] ?? '';
-                    $fromName = $correoConfig['from_nombre'] ?? ($municipalidad['nombre'] ?? 'Soporte');
+                    $fromEmail = trim((string) ($correoConfig['from_correo'] ?? ''));
+                    $imapEmail = trim((string) ($correoConfig['correo_imap'] ?? ''));
+                    if ($fromEmail === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+                        $fromEmail = $imapEmail;
+                    }
+                    $fromName = trim((string) ($correoConfig['from_nombre'] ?? ''));
+                    if ($fromName === '') {
+                        $fromName = (string) ($municipalidad['nombre'] ?? 'Soporte');
+                    }
 
                     if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
                         $subject = 'Comprobante de pago - ' . ($cobro['servicio'] ?? 'Servicio');
