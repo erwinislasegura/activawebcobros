@@ -102,6 +102,45 @@ function build_payment_receipt_email(array $data): string
 HTML;
 }
 
+function send_payment_receipt_email(string $toEmail, string $subject, string $bodyHtml, string $fromEmail, string $fromName): bool
+{
+    $toEmail = trim($toEmail);
+    $fromEmail = trim($fromEmail);
+    $fromName = trim($fromName);
+
+    if ($toEmail === '' || $fromEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL) || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $subject = trim(str_replace(["\r", "\n"], ' ', $subject));
+    $subjectEncoded = '=?UTF-8?B?' . base64_encode($subject !== '' ? $subject : 'Comprobante de pago') . '?=';
+    $displayName = $fromName !== '' ? mb_encode_mimeheader($fromName, 'UTF-8') : $fromEmail;
+    $messageId = sprintf('<%s.%s@%s>', time(), bin2hex(random_bytes(6)), preg_replace('/[^a-z0-9.-]/i', '', (string) (parse_url(base_url(), PHP_URL_HOST) ?: 'localhost')));
+
+    $headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+        'Date: ' . date(DATE_RFC2822),
+        'Message-ID: ' . $messageId,
+        'From: ' . $displayName . ' <' . $fromEmail . '>',
+        'Reply-To: ' . $fromEmail,
+        'Return-Path: ' . $fromEmail,
+        'X-Mailer: PHP/' . phpversion(),
+        'X-Auto-Response-Suppress: OOF, AutoReply',
+    ];
+
+    $headersString = implode("\r\n", $headers);
+    $extraParams = '-f ' . escapeshellarg($fromEmail);
+
+    $sent = @mail($toEmail, $subjectEncoded, $bodyHtml, $headersString, $extraParams);
+    if (!$sent) {
+        $sent = @mail($toEmail, $subjectEncoded, $bodyHtml, $headersString);
+    }
+
+    return $sent;
+}
+
 
 try {
     db()->exec(
@@ -243,8 +282,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                         $correoConfig = [];
                     }
 
-                    $fromEmail = $correoConfig['from_correo'] ?? $correoConfig['correo_imap'] ?? '';
-                    $fromName = $correoConfig['from_nombre'] ?? ($municipalidad['nombre'] ?? 'Soporte');
+                    $fromEmail = trim((string) ($correoConfig['from_correo'] ?? ''));
+                    $imapEmail = trim((string) ($correoConfig['correo_imap'] ?? ''));
+                    if ($fromEmail === '' || !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+                        $fromEmail = $imapEmail;
+                    }
+                    $fromName = trim((string) ($correoConfig['from_nombre'] ?? ''));
+                    if ($fromName === '') {
+                        $fromName = (string) ($municipalidad['nombre'] ?? 'Soporte');
+                    }
 
                     if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
                         $subject = 'Comprobante de pago - ' . ($cobro['servicio'] ?? 'Servicio');
@@ -261,12 +307,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verify_csrf($_POST['csrf_token'] ??
                             'comprobante' => 'PAY-' . str_pad((string) $pagoId, 6, '0', STR_PAD_LEFT),
                             'fecha_emision' => date('d/m/Y H:i'),
                         ]);
-                        $headers = [
-                            'MIME-Version: 1.0',
-                            'Content-type: text/html; charset=UTF-8',
-                            'From: ' . ($fromName !== '' ? $fromName : $fromEmail) . ' <' . $fromEmail . '>',
-                        ];
-                        $mailSent = @mail((string) $cobro['cliente_correo'], $subject, $bodyHtml, implode("\r\n", $headers));
+                        $mailSent = send_payment_receipt_email(
+                            (string) $cobro['cliente_correo'],
+                            $subject,
+                            $bodyHtml,
+                            (string) $fromEmail,
+                            (string) $fromName
+                        );
                     }
                 }
 
